@@ -3,7 +3,7 @@ import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { Button } from "@mui/material";
 import { auth, db } from "../firebase";
 import { doc, setDoc, arrayUnion } from "firebase/firestore";
-import { FaGoogle } from "react-icons/fa";
+import GoogleLogo from "../../assets/svg/google.svg"; // Adjust the path to your SVG file
 
 const GoogleAuth = () => {
   const handleLogin = () => {
@@ -62,7 +62,8 @@ const GoogleAuth = () => {
         },
       }}
     >
-      <FaGoogle style={{ marginRight: "10px" }} /> Sign in with Google
+      <img src={GoogleLogo} alt="Google logo" style={{ marginRight: "10px", width: "20px", height: "20px" }} />
+      Sign in with Google
     </Button>
   );
 };
