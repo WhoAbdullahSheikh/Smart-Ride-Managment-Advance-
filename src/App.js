@@ -1,13 +1,13 @@
 // src/App.js
 import React from 'react';
-import GoogleAuth from './libs/comps/GoogleAuth';
+import SignUp from './libs/components/SignUp';
 
-function App() {
+const App = () => {
   return (
-    <div className="App">
-      <GoogleAuth />
+    <div>
+      <SignUp />
     </div>
   );
-}
+};
 
 export default App;
