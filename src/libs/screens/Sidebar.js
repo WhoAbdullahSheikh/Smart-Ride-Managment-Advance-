@@ -1,14 +1,13 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Box, Button, Typography } from "@mui/material";
-import {
-  FaBars,
-  FaHome,
-  FaUser,
-  FaSignOutAlt,
-} from "react-icons/fa";
+import { FaBars, FaHome, FaUser, FaSignOutAlt } from "react-icons/fa";
+import { signOut } from "firebase/auth";
+import { auth } from "../firebase";  // Import auth from your Firebase setup
 
 const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
+  const navigate = useNavigate(); // Hook to navigate to other routes
+
   const sidebarButtons = [
     { name: "Home", icon: <FaHome />, path: "/dashboard", color: "#4e73df" },
     { name: "Profile", icon: <FaUser />, path: "/dashboard/profile", color: "#1cc88a" },
@@ -19,6 +18,19 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
       color: "#e74a3b",
     },
   ];
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      // Clear session storage
+      sessionStorage.removeItem("user");
+      // Clear any other relevant storage
+      localStorage.removeItem("user");
+      navigate("/signin");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   return (
     <Box
@@ -72,7 +84,13 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
             key={button.name}
             component={Link}
             to={button.path}
-            onClick={() => setActiveButton(button.name)}
+            onClick={() => {
+              if (button.name === "Sign Out") {
+                handleSignOut();  // Sign out when clicking the "Sign Out" button
+              } else {
+                setActiveButton(button.name);
+              }
+            }}
             sx={{
               color: "#fff",
               justifyContent: isOpen ? "flex-start" : "center",

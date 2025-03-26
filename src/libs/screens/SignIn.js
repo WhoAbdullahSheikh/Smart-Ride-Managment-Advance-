@@ -40,7 +40,33 @@ const SignIn = () => {
       );
       const user = userCredential.user;
 
-      console.log("User signed in:", user);
+      // Check if user exists in Firestore
+      const emailUserRef = doc(db, "email", user.uid);
+      const emailUserDoc = await getDoc(emailUserRef);
+
+      if (!emailUserDoc.exists()) {
+        await auth.signOut();
+        throw new Error("Account not found in database");
+      }
+
+      // Get user data including createdAt
+      const userData = emailUserDoc.data().userData || emailUserDoc.data();
+
+      // Store complete user data in session
+      sessionStorage.setItem(
+        "user",
+        JSON.stringify({
+          ...userData,
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || userData.displayName,
+          // Ensure createdAt exists, otherwise set current time
+          createdAt: userData.createdAt || {
+            seconds: Math.floor(Date.now() / 1000),
+          },
+        })
+      );
+
       setSnackbarMessage("Successfully logged in!");
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
@@ -51,13 +77,17 @@ const SignIn = () => {
     } catch (error) {
       console.error("Error signing in:", error);
 
+      let errorMessage = "Error during sign-in. Please try again.";
       if (error.code === "auth/user-not-found") {
-        setSnackbarMessage("This account does not exist.");
-        setSnackbarSeverity("error");
-      } else {
-        setSnackbarMessage("Error during sign-in. Please try again.");
-        setSnackbarSeverity("error");
+        errorMessage = "This account does not exist.";
+      } else if (error.message === "Account not found in database") {
+        errorMessage = "Account does not exist.";
+      } else if (error.code === "auth/wrong-password") {
+        errorMessage = "Incorrect password.";
       }
+
+      setSnackbarMessage(errorMessage);
+      setSnackbarSeverity("error");
       setOpenSnackbar(true);
     }
   };
@@ -73,7 +103,24 @@ const SignIn = () => {
       const userSnapshot = await getDoc(userRef);
 
       if (userSnapshot.exists()) {
-        console.log("Google user signed in:", user);
+        const userData = userSnapshot.data().userData || userSnapshot.data();
+
+        // Store complete user data in session
+        sessionStorage.setItem(
+          "user",
+          JSON.stringify({
+            ...userData,
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            // Ensure createdAt exists, otherwise set current time
+            createdAt: userData.createdAt || {
+              seconds: Math.floor(Date.now() / 1000),
+            },
+          })
+        );
+
         setSnackbarMessage("Successfully logged in with Google!");
         setSnackbarSeverity("success");
         setOpenSnackbar(true);
@@ -82,6 +129,7 @@ const SignIn = () => {
           navigate("/dashboard");
         }, 2000);
       } else {
+        await auth.signOut();
         setSnackbarMessage("This Google account is not registered.");
         setSnackbarSeverity("error");
         setOpenSnackbar(true);

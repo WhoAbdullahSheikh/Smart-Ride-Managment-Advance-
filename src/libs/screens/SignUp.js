@@ -23,7 +23,7 @@ import {
 } from "firebase/firestore";
 import { Link, useNavigate } from "react-router-dom";
 import backgroundImage from "../../assets/images/img.jpg";
-
+import { serverTimestamp } from "firebase/firestore";  // Import serverTimestamp
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -91,9 +91,9 @@ const SignUp = () => {
         setDoc(userRef, {
           userData: {
             email: user.email,
-            name: name,
+            displayName: name,
             username: username,
-            createdAt: new Date(),
+            createdAt: serverTimestamp(),
           },
           signUpMethods: arrayUnion("Email/Password"),
         })
