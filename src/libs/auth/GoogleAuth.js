@@ -2,41 +2,44 @@ import React from "react";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { Button } from "@mui/material";
 import { auth, db } from "../firebase";
-import { doc, setDoc, arrayUnion } from "firebase/firestore";
-import GoogleLogo from "../../assets/svg/google.svg"; // Adjust the path to your SVG file
+import { doc, getDoc } from "firebase/firestore";
+import GoogleLogo from "../../assets/svg/google.svg";
+import { useNavigate } from "react-router-dom";
 
-const GoogleAuth = () => {
-  const handleLogin = () => {
+const GoogleAuth = ({ openSnackbar, setOpenSnackbar, setSnackbarMessage, setSnackbarSeverity }) => {
+  const navigate = useNavigate();
+
+  const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
 
-    signInWithPopup(auth, provider)
-      .then((result) => {
-        console.log("User signed in with Google:", result.user);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
 
-        const user = result.user;
+      console.log("User signed in with Google:", user);
 
-        const userRef = doc(db, "google", user.uid);
+      const userRef = doc(db, "google", user.uid);
+      const userSnapshot = await getDoc(userRef);
 
-        setDoc(userRef, {
-          userData: {
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            createdAt: new Date(),
-          },
-          signUpMethods: arrayUnion("Google"),
-        })
-          .then(() => {
-            console.log("Google user data saved to Firestore:", user.uid);
-          })
-          .catch((error) => {
-            console.error("Error saving data to Firestore:", error);
-          });
+      if (userSnapshot.exists()) {
+        console.log("Google user already exists in Firestore:", user.uid);
+        setSnackbarMessage("Successfully logged in!");
+        setSnackbarSeverity("success");
+        setOpenSnackbar(true);
 
-      })
-      .catch((error) => {
-        console.error("Error during Google sign-in:", error.message);
-      });
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2000);
+      } else {
+        setSnackbarMessage("This account doesn't exist. Please sign up first.");
+        setSnackbarSeverity("error");
+        setOpenSnackbar(true);
+      }
+    } catch (error) {
+      setSnackbarMessage("An error occurred during Google sign-in.");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    }
   };
 
   return (
@@ -63,7 +66,7 @@ const GoogleAuth = () => {
       }}
     >
       <img src={GoogleLogo} alt="Google logo" style={{ marginRight: "10px", width: "20px", height: "20px" }} />
-      Sign in with Google
+      Continue with Google
     </Button>
   );
 };

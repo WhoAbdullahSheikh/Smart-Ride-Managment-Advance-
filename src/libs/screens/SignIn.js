@@ -1,0 +1,254 @@
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import GoogleAuth from "../auth/GoogleAuth";
+import { TextField, Button, Typography, Container, Box, Snackbar, Alert } from "@mui/material";
+import { FaEnvelope, FaLock } from "react-icons/fa";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase";
+import backgroundImage from "../../assets/images/img.jpg";
+
+const SignIn = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [openSnackbar, setOpenSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState("error");
+  const navigate = useNavigate();
+
+  const handleEmailSignIn = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      console.log("User signed in:", user);
+      setSnackbarMessage("Successfully logged in!");
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 2000);
+    } catch (error) {
+      console.error("Error signing in:", error);
+
+      if (error.code === "auth/user-not-found") {
+        setSnackbarMessage("This account does not exist.");
+        setSnackbarSeverity("error");
+      } else {
+        setSnackbarMessage("Error during sign-in. Please try again.");
+        setSnackbarSeverity("error");
+      }
+      setOpenSnackbar(true);
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setOpenSnackbar(false);
+  };
+
+  return (
+    <Box
+      sx={{
+        minHeight: "100vh",
+        width: "100vw",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        padding: "0",
+        overflow: "hidden",
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundImage: `url(${backgroundImage})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundAttachment: "fixed",
+          filter: "brightness(0.3)",
+          zIndex: -1,
+        },
+      }}
+    >
+      {}
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 10,
+        }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: "100%" }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
+
+      <Container
+        component="main"
+        maxWidth="xs"
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          zIndex: 1,
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            width: "100%",
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            padding: "30px",
+            borderRadius: "30px",
+            boxShadow: 5,
+          }}
+        >
+          <Typography
+            variant="h4"
+            sx={{ mb: 2, fontFamily: "Raleway, sans-serif" }}
+          >
+            Sign In
+          </Typography>
+
+          <form onSubmit={handleEmailSignIn} style={{ width: "100%" }}>
+            <TextField
+              required
+              fullWidth
+              label="Email Address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              margin="normal"
+              InputProps={{
+                startAdornment: (
+                  <FaEnvelope style={{ marginRight: "15px", color: "#0f1728" }} />
+                ),
+              }}
+              sx={{
+                "& .MuiInputBase-input": {
+                  color: "#333",
+                  fontFamily: "Raleway, sans-serif",
+                },
+                "& .MuiInputBase-input::placeholder": {
+                  color: "#B0B0B0",
+                  fontSize: "12px",
+                },
+                "& .MuiInput-underline:after": {
+                  borderBottomColor: "#0f1728",
+                },
+                "& .MuiInput-underline:before": {
+                  borderBottomColor: "#B0B0B0",
+                },
+                "& .MuiFormLabel-root": {
+                  fontFamily: "Raleway-Bold, sans-serif",
+                },
+              }}
+              placeholder="Enter your email"
+            />
+
+            <TextField
+              required
+              fullWidth
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              margin="normal"
+              InputProps={{
+                startAdornment: (
+                  <FaLock style={{ marginRight: "15px", color: "#0f1728" }} />
+                ),
+              }}
+              sx={{
+                "& .MuiInputBase-input": {
+                  color: "#333",
+                  fontFamily: "Raleway, sans-serif",
+                },
+                "& .MuiInputBase-input::placeholder": {
+                  color: "#B0B0B0",
+                  fontSize: "12px",
+                },
+                "& .MuiInput-underline:after": {
+                  borderBottomColor: "#0f1728",
+                },
+                "& .MuiInput-underline:before": {
+                  borderBottomColor: "#B0B0B0",
+                },
+                "& .MuiFormLabel-root": {
+                  fontFamily: "Raleway-Bold, sans-serif",
+                },
+              }}
+              placeholder="Enter your password"
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              color="#0f1728"
+              sx={{
+                mt: 3,
+                py: 1,
+                color: "#fff",
+                backgroundColor: "#0f1728",
+                textTransform: "none",
+                fontFamily: "Raleway, sans-serif",
+                borderRadius: "10px",
+                "&:hover": {
+                  backgroundColor: "rgba(15, 23, 40, 0.9)",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                  transform: "scale(1.01)",
+                },
+              }}
+            >
+              Sign In
+            </Button>
+          </form>
+
+          <Box sx={{ mt: 3, textAlign: "center", width: "100%" }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Or
+            </Typography>
+            {}
+            <GoogleAuth 
+              openSnackbar={openSnackbar}
+              setOpenSnackbar={setOpenSnackbar}
+              setSnackbarMessage={setSnackbarMessage}
+              setSnackbarSeverity={setSnackbarSeverity}
+            />
+          </Box>
+
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" style={{ fontFamily: "Raleway, sans-serif" }}>
+              Don't have an account?{" "}
+              <Link to="/signup" style={{ color: "#0f1728", textDecoration: "none", fontFamily: "Raleway-Bold, sans-serif" }}>
+                Sign Up
+              </Link>
+            </Typography>
+          </Box>
+        </Box>
+      </Container>
+    </Box>
+  );
+};
+
+export default SignIn;
