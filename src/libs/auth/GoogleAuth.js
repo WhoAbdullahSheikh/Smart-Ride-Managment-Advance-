@@ -2,7 +2,7 @@ import React from "react";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { Button } from "@mui/material";
 import { auth, db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore"; // Add setDoc to register new users
 import GoogleLogo from "../../assets/svg/google.svg";
 import { useNavigate } from "react-router-dom";
 
@@ -18,24 +18,44 @@ const GoogleAuth = ({ openSnackbar, setOpenSnackbar, setSnackbarMessage, setSnac
 
       console.log("User signed in with Google:", user);
 
+      // Reference to the user's document in Firestore (under the 'google' collection)
       const userRef = doc(db, "google", user.uid);
       const userSnapshot = await getDoc(userRef);
 
+      // Check if the user already exists in the Google collection
       if (userSnapshot.exists()) {
         console.log("Google user already exists in Firestore:", user.uid);
-        setSnackbarMessage("Successfully logged in!");
+
+        // Show an error message in Snackbar if user exists
+        setSnackbarMessage("This account is already linked with Google. Please sign in.");
+        setSnackbarSeverity("error");
+        setOpenSnackbar(true);
+      } else {
+        // If user doesn't exist, register the user in Firestore
+        await setDoc(userRef, {
+          userData: {
+            email: user.email,
+            name: user.displayName,
+            username: user.displayName.replace(/\s+/g, "").toLowerCase(), // Remove spaces for username
+            createdAt: new Date(),
+          },
+          signUpMethods: ["Google"],  // Track how they signed up
+        });
+
+        console.log("New Google user added to Firestore:", user.uid);
+
+        // Notify that the account is created
+        setSnackbarMessage("Account created successfully! You can now sign in.");
         setSnackbarSeverity("success");
         setOpenSnackbar(true);
 
         setTimeout(() => {
-          navigate("/dashboard");
+          // After registration, navigate the user to the sign-in page
+          navigate("/signin");
         }, 2000);
-      } else {
-        setSnackbarMessage("This account doesn't exist. Please sign up first.");
-        setSnackbarSeverity("error");
-        setOpenSnackbar(true);
       }
     } catch (error) {
+      console.error("Error during Google sign-in:", error);
       setSnackbarMessage("An error occurred during Google sign-in.");
       setSnackbarSeverity("error");
       setOpenSnackbar(true);

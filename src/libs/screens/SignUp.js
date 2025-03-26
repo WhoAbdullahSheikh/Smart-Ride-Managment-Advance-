@@ -1,24 +1,86 @@
 import React, { useState } from "react";
 import GoogleAuth from "../auth/GoogleAuth";
-import { TextField, Button, Typography, Container, Box, Snackbar, Alert } from "@mui/material";
-import { FaEnvelope, FaLock } from "react-icons/fa";
+import {
+  TextField,
+  Button,
+  Typography,
+  Container,
+  Box,
+  Snackbar,
+  Alert,
+} from "@mui/material";
+import { FaEnvelope, FaLock, FaUser } from "react-icons/fa";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
-import { doc, setDoc, arrayUnion } from "firebase/firestore";
-import { Link } from "react-router-dom";
+import {
+  doc,
+  setDoc,
+  arrayUnion,
+  getDocs,
+  query,
+  collection,
+  where,
+} from "firebase/firestore";
+import { Link, useNavigate } from "react-router-dom";
 import backgroundImage from "../../assets/images/img.jpg";
 
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [error, setError] = useState("");
-  const [openSnackbar, setOpenSnackbar] = useState(false); // To control Snackbar visibility
-  const [snackbarMessage, setSnackbarMessage] = useState(""); // Snackbar message
-  const [snackbarSeverity, setSnackbarSeverity] = useState("error"); // Snackbar severity
+  const [openSnackbar, setOpenSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState("error");
 
-  const handleEmailSignUp = (e) => {
+  const navigate = useNavigate();
+
+  const isValidUsername = (username) => {
+    const regex = /^(?=.*\d)[a-zA-Z0-9]+$/;
+    return regex.test(username);
+  };
+
+  const checkIfUsernameExists = async (username) => {
+    const emailQuery = query(
+      collection(db, "email"),
+      where("userData.username", "==", username)
+    );
+    const googleQuery = query(
+      collection(db, "google"),
+      where("userData.username", "==", username)
+    );
+
+    const emailSnapshot = await getDocs(emailQuery);
+    const googleSnapshot = await getDocs(googleQuery);
+
+    if (!emailSnapshot.empty || !googleSnapshot.empty) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleEmailSignUp = async (e) => {
     e.preventDefault();
     setError("");
+
+    if (!isValidUsername(username)) {
+      setSnackbarMessage(
+        "Username combination should be alphanumeric with at least one number."
+      );
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+      return;
+    }
+
+    const usernameExists = await checkIfUsernameExists(username);
+    if (usernameExists) {
+      setSnackbarMessage("Username already exists. Please choose another.");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+      return;
+    }
 
     createUserWithEmailAndPassword(auth, email, password)
       .then((userCredential) => {
@@ -29,6 +91,8 @@ const SignUp = () => {
         setDoc(userRef, {
           userData: {
             email: user.email,
+            name: name,
+            username: username,
             createdAt: new Date(),
           },
           signUpMethods: arrayUnion("Email/Password"),
@@ -44,6 +108,10 @@ const SignUp = () => {
         setSnackbarMessage("Successfully signed up!");
         setSnackbarSeverity("success");
         setOpenSnackbar(true);
+
+        setTimeout(() => {
+          navigate("/signin");
+        }, 2000);
       })
       .catch((error) => {
         console.error("Error signing up:", error);
@@ -54,7 +122,7 @@ const SignUp = () => {
   };
 
   const handleCloseSnackbar = () => {
-    setOpenSnackbar(false); // Close the Snackbar when it's dismissed
+    setOpenSnackbar(false);
   };
 
   return (
@@ -66,7 +134,7 @@ const SignUp = () => {
         alignItems: "center",
         justifyContent: "center",
         position: "relative",
-        padding: "0", // Remove padding to prevent unwanted scrolling space
+        padding: "0",
         overflow: "hidden",
         "&::before": {
           content: '""',
@@ -85,21 +153,24 @@ const SignUp = () => {
         },
       }}
     >
-      {/* Snackbar for error or success messages */}
       <Snackbar
         open={openSnackbar}
-        autoHideDuration={6000}
+        autoHideDuration={4000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }} // Position at the top of the page
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
         sx={{
-          position: 'fixed',
+          position: "fixed",
           top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 10, // Ensures it's above other elements
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 10,
         }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: "100%" }}>
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbarSeverity}
+          sx={{ width: "100%" }}
+        >
           {snackbarMessage}
         </Alert>
       </Snackbar>
@@ -110,11 +181,11 @@ const SignUp = () => {
         sx={{
           display: "flex",
           justifyContent: "center",
-          position: "fixed",  // Fix the container in place
-          top: "50%",   // Center vertically
-          left: "50%",  // Center horizontally
-          transform: "translate(-50%, -50%)",  // Center precisely
-          zIndex: 1, // Ensure it's above the background
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          zIndex: 1,
         }}
       >
         <Box
@@ -141,13 +212,78 @@ const SignUp = () => {
             <TextField
               required
               fullWidth
+              label="Full Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              margin="normal"
+              sx={{
+                "& .MuiInputBase-input": {
+                  color: "#333",
+                  fontFamily: "Raleway, sans-serif",
+                },
+                "& .MuiInputBase-input::placeholder": {
+                  color: "#B0B0B0",
+                  fontSize: "12px",
+                },
+                "& .MuiInput-underline:after": {
+                  borderBottomColor: "#0f1728",
+                },
+                "& .MuiInput-underline:before": {
+                  borderBottomColor: "#B0B0B0",
+                },
+                "& .MuiFormLabel-root": {
+                  fontFamily: "Raleway-Bold, sans-serif",
+                },
+              }}
+              placeholder="Enter your full name"
+            />
+
+            <TextField
+              required
+              fullWidth
+              label="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              margin="normal"
+              InputProps={{
+                startAdornment: (
+                  <FaUser style={{ marginRight: "15px", color: "#0f1728" }} />
+                ),
+              }}
+              sx={{
+                "& .MuiInputBase-input": {
+                  color: "#333",
+                  fontFamily: "Raleway, sans-serif",
+                },
+                "& .MuiInputBase-input::placeholder": {
+                  color: "#B0B0B0",
+                  fontSize: "12px",
+                },
+                "& .MuiInput-underline:after": {
+                  borderBottomColor: "#0f1728",
+                },
+                "& .MuiInput-underline:before": {
+                  borderBottomColor: "#B0B0B0",
+                },
+                "& .MuiFormLabel-root": {
+                  fontFamily: "Raleway-Bold, sans-serif",
+                },
+              }}
+              placeholder="Enter your username"
+            />
+
+            <TextField
+              required
+              fullWidth
               label="Email Address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               margin="normal"
               InputProps={{
                 startAdornment: (
-                  <FaEnvelope style={{ marginRight: "15px", color: "#0f1728" }} />
+                  <FaEnvelope
+                    style={{ marginRight: "15px", color: "#0f1728" }}
+                  />
                 ),
               }}
               sx={{
@@ -218,8 +354,9 @@ const SignUp = () => {
                 color: "#fff",
                 backgroundColor: "#0f1728",
                 textTransform: "none",
-                fontFamily: "Raleway, sans-serif",
+                fontFamily: "Raleway-Bold, sans-serif",
                 borderRadius: "10px",
+                fontFamily: "Raleway, sans-serif",
                 "&:hover": {
                   backgroundColor: "rgba(15, 23, 40, 0.9)",
                   boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
@@ -230,32 +367,33 @@ const SignUp = () => {
               Sign Up
             </Button>
           </form>
-
           <Box sx={{ mt: 3, textAlign: "center", width: "100%" }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
               Or
             </Typography>
-            <GoogleAuth />
+            <GoogleAuth
+              openSnackbar={openSnackbar}
+              setOpenSnackbar={setOpenSnackbar}
+              setSnackbarMessage={setSnackbarMessage}
+              setSnackbarSeverity={setSnackbarSeverity}
+            />
           </Box>
-
-          <Box sx={{ mt: 2 }}>
-            <Typography
-              variant="body2"
-              style={{ fontFamily: "Raleway, sans-serif" }}
+          <Typography
+            variant="body2"
+            sx={{
+              mt: 2,
+              textAlign: "center",
+              fontFamily: "Raleway, sans-serif",
+            }}
+          >
+            Already have an account?{" "}
+            <Link
+              to="/signin"
+              style={{ color: "#0f1728", textDecoration: "none" }}
             >
-              Already have an account?{" "}
-              <Link
-                to="/signin"
-                style={{
-                  color: "#0f1728",
-                  textDecoration: "none",
-                  fontFamily: "Raleway-Bold, sans-serif",
-                }}
-              >
-                Sign In
-              </Link>
-            </Typography>
-          </Box>
+              Sign In
+            </Link>
+          </Typography>
         </Box>
       </Container>
     </Box>

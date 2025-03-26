@@ -1,11 +1,23 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import GoogleAuth from "../auth/GoogleAuth";
-import { TextField, Button, Typography, Container, Box, Snackbar, Alert } from "@mui/material";
+import {
+  TextField,
+  Button,
+  Typography,
+  Container,
+  Box,
+  Snackbar,
+  Alert,
+} from "@mui/material";
 import { FaEnvelope, FaLock } from "react-icons/fa";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
 import backgroundImage from "../../assets/images/img.jpg";
+import { doc, getDoc } from "firebase/firestore";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { db } from "../firebase";
+import GoogleLogo from "../../assets/svg/google.svg";
 
 const SignIn = () => {
   const [email, setEmail] = useState("");
@@ -21,7 +33,11 @@ const SignIn = () => {
     setError("");
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
       const user = userCredential.user;
 
       console.log("User signed in:", user);
@@ -42,6 +58,38 @@ const SignIn = () => {
         setSnackbarMessage("Error during sign-in. Please try again.");
         setSnackbarSeverity("error");
       }
+      setOpenSnackbar(true);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      const userRef = doc(db, "google", user.uid);
+      const userSnapshot = await getDoc(userRef);
+
+      if (userSnapshot.exists()) {
+        console.log("Google user signed in:", user);
+        setSnackbarMessage("Successfully logged in with Google!");
+        setSnackbarSeverity("success");
+        setOpenSnackbar(true);
+
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2000);
+      } else {
+        setSnackbarMessage("This Google account is not registered.");
+        setSnackbarSeverity("error");
+        setOpenSnackbar(true);
+      }
+    } catch (error) {
+      console.error("Error during Google sign-in:", error);
+      setSnackbarMessage("Error during Google sign-in. Please try again.");
+      setSnackbarSeverity("error");
       setOpenSnackbar(true);
     }
   };
@@ -78,21 +126,24 @@ const SignIn = () => {
         },
       }}
     >
-      {}
       <Snackbar
         open={openSnackbar}
         autoHideDuration={4000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: "top", horizontal: "center" }}
         sx={{
-          position: 'fixed',
+          position: "fixed",
           top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
+          left: "50%",
+          transform: "translateX(-50%)",
           zIndex: 10,
         }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: "100%" }}>
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbarSeverity}
+          sx={{ width: "100%" }}
+        >
           {snackbarMessage}
         </Alert>
       </Snackbar>
@@ -140,7 +191,9 @@ const SignIn = () => {
               margin="normal"
               InputProps={{
                 startAdornment: (
-                  <FaEnvelope style={{ marginRight: "15px", color: "#0f1728" }} />
+                  <FaEnvelope
+                    style={{ marginRight: "15px", color: "#0f1728" }}
+                  />
                 ),
               }}
               sx={{
@@ -228,19 +281,52 @@ const SignIn = () => {
             <Typography variant="body2" sx={{ mb: 1 }}>
               Or
             </Typography>
-            {}
-            <GoogleAuth 
-              openSnackbar={openSnackbar}
-              setOpenSnackbar={setOpenSnackbar}
-              setSnackbarMessage={setSnackbarMessage}
-              setSnackbarSeverity={setSnackbarSeverity}
-            />
+            <Button
+              onClick={handleGoogleSignIn}
+              fullWidth
+              variant="contained"
+              color="#0f1728"
+              sx={{
+                mt: 2,
+                py: 1,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                color: "#fff",
+                backgroundColor: "#0f1728",
+                textTransform: "none",
+                fontFamily: "Raleway, sans-serif",
+                borderRadius: "10px",
+                "&:hover": {
+                  backgroundColor: "rgba(15, 23, 40, 0.9)",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                  transform: "scale(1.01)",
+                },
+              }}
+            >
+              <img
+                src={GoogleLogo}
+                alt="Google logo"
+                style={{ marginRight: "10px", width: "20px", height: "20px" }}
+              />
+              Continue with Google
+            </Button>
           </Box>
 
           <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" style={{ fontFamily: "Raleway, sans-serif" }}>
+            <Typography
+              variant="body2"
+              style={{ fontFamily: "Raleway, sans-serif" }}
+            >
               Don't have an account?{" "}
-              <Link to="/signup" style={{ color: "#0f1728", textDecoration: "none", fontFamily: "Raleway-Bold, sans-serif" }}>
+              <Link
+                to="/signup"
+                style={{
+                  color: "#0f1728",
+                  textDecoration: "none",
+                  fontFamily: "Raleway-Bold, sans-serif",
+                }}
+              >
                 Sign Up
               </Link>
             </Typography>
