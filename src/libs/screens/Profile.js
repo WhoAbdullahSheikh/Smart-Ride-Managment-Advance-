@@ -102,8 +102,15 @@ const Profile = () => {
       >
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} sm={3} textAlign="center">
-            <Avatar sx={{ width: 100, height: 100, margin: "0 auto" }}>
-              {userData.displayName ? userData.displayName[0] : "U"}
+            {/* Avatar: show photoURL if available, otherwise show the initial of the name */}
+            <Avatar
+              sx={{ width: 100, height: 100, margin: "0 auto" }}
+              alt={userData.displayName}
+              src={userData.photoURL || undefined}
+            >
+              {!userData.photoURL && userData.displayName
+                ? userData.displayName[0]
+                : ""}
             </Avatar>
           </Grid>
           <Grid item xs={12} sm={9}>
