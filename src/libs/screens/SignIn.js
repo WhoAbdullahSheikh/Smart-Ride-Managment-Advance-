@@ -40,7 +40,6 @@ const SignIn = () => {
       );
       const user = userCredential.user;
 
-      // Check if user exists in Firestore
       const emailUserRef = doc(db, "email", user.uid);
       const emailUserDoc = await getDoc(emailUserRef);
 
@@ -49,10 +48,8 @@ const SignIn = () => {
         throw new Error("Account not found in database");
       }
 
-      // Get user data including createdAt
       const userData = emailUserDoc.data().userData || emailUserDoc.data();
 
-      // Store complete user data in session
       sessionStorage.setItem(
         "user",
         JSON.stringify({
@@ -60,7 +57,6 @@ const SignIn = () => {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName || userData.displayName,
-          // Ensure createdAt exists, otherwise set current time
           createdAt: userData.createdAt || {
             seconds: Math.floor(Date.now() / 1000),
           },
@@ -70,6 +66,7 @@ const SignIn = () => {
       setSnackbarMessage("Successfully logged in!");
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
+      console.log(userData);
 
       setTimeout(() => {
         navigate("/dashboard");
@@ -105,7 +102,6 @@ const SignIn = () => {
       if (userSnapshot.exists()) {
         const userData = userSnapshot.data().userData || userSnapshot.data();
 
-        // Store complete user data in session
         sessionStorage.setItem(
           "user",
           JSON.stringify({
@@ -114,13 +110,12 @@ const SignIn = () => {
             email: user.email,
             displayName: user.displayName,
             photoURL: user.photoURL,
-            // Ensure createdAt exists, otherwise set current time
             createdAt: userData.createdAt || {
               seconds: Math.floor(Date.now() / 1000),
             },
           })
         );
-
+        console.log(userData);
         setSnackbarMessage("Successfully logged in with Google!");
         setSnackbarSeverity("success");
         setOpenSnackbar(true);

@@ -7,26 +7,74 @@ import {
   CircularProgress,
   Button,
   Chip,
-  useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { auth, db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import {
   FaEdit,
   FaEnvelope,
   FaUser,
   FaCalendarAlt,
   FaSignOutAlt,
+  FaSave,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from "firebase/auth";
+import { IconButton, InputAdornment } from "@mui/material";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 const Profile = () => {
-  const theme = useTheme();
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [editedData, setEditedData] = useState({
+    displayName: "",
+    username: "",
+    email: "",
+  });
+  const [authProvider, setAuthProvider] = useState(null);
+  const [changePasswordMode, setChangePasswordMode] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordErrors, setPasswordErrors] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+  const [showPassword, setShowPassword] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
+  const handleClickShowPassword = (field) => {
+    setShowPassword({ ...showPassword, [field]: !showPassword[field] });
+  };
+
+  const handleMouseDownPassword = (event) => {
+    event.preventDefault();
+  };
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -34,12 +82,26 @@ const Profile = () => {
 
       if (userFromSession) {
         setUserData(userFromSession);
+        // Determine auth provider from session data
+        if (userFromSession.providerData && userFromSession.providerData[0]) {
+          setAuthProvider(userFromSession.providerData[0].providerId);
+        } else {
+          // Fallback for older session data
+          const user = auth.currentUser;
+          if (user && user.providerData && user.providerData[0]) {
+            setAuthProvider(user.providerData[0].providerId);
+          }
+        }
         setLoading(false);
       } else {
         const user = auth.currentUser;
-
         if (user) {
           try {
+            // Get auth provider info
+            if (user.providerData && user.providerData[0]) {
+              setAuthProvider(user.providerData[0].providerId);
+            }
+
             const googleUserRef = doc(db, "google", user.uid);
             const googleUserDoc = await getDoc(googleUserRef);
 
@@ -70,6 +132,88 @@ const Profile = () => {
     fetchUserData();
   }, []);
 
+  const handleEditClick = () => {
+    setEditedData({
+      displayName: userData.displayName || "",
+      username: userData.username || "",
+      email: userData.email || "",
+    });
+    setEditMode(true);
+  };
+
+  const handleSaveChanges = async () => {
+    try {
+      if (!editedData.displayName.trim()) {
+        setSnackbar({
+          open: true,
+          message: "Full name cannot be empty",
+          severity: "error",
+        });
+        return;
+      }
+
+      if (!editedData.username.trim()) {
+        setSnackbar({
+          open: true,
+          message: "Username cannot be empty",
+          severity: "error",
+        });
+        return;
+      }
+
+      const user = auth.currentUser;
+      if (!user) throw new Error("No authenticated user");
+
+      let userRef;
+      const googleUserDoc = await getDoc(doc(db, "google", user.uid));
+      if (googleUserDoc.exists()) {
+        userRef = doc(db, "google", user.uid);
+      } else {
+        userRef = doc(db, "email", user.uid);
+      }
+
+      await updateDoc(userRef, {
+        "userData.displayName": editedData.displayName.trim(),
+        "userData.username": editedData.username.trim(),
+      });
+
+      setUserData({
+        ...userData,
+        displayName: editedData.displayName.trim(),
+        username: editedData.username.trim(),
+      });
+
+      const updatedUser = {
+        ...userData,
+        displayName: editedData.displayName.trim(),
+        username: editedData.username.trim(),
+      };
+      sessionStorage.setItem("user", JSON.stringify(updatedUser));
+
+      setSnackbar({
+        open: true,
+        message: "Profile updated successfully!",
+        severity: "success",
+      });
+      setEditMode(false);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to update profile",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditedData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -81,6 +225,99 @@ const Profile = () => {
     }
   };
 
+  const handlePasswordInputChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    setPasswordErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
+  };
+
+  const handleChangePassword = async () => {
+    try {
+      let isValid = true;
+      const newErrors = {
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      };
+
+      if (!passwordData.currentPassword) {
+        newErrors.currentPassword = "Current password is required";
+        isValid = false;
+      }
+
+      if (!passwordData.newPassword) {
+        newErrors.newPassword = "New password is required";
+        isValid = false;
+      } else if (passwordData.newPassword.length < 6) {
+        newErrors.newPassword = "Password must be at least 6 characters";
+        isValid = false;
+      }
+
+      if (passwordData.newPassword !== passwordData.confirmPassword) {
+        newErrors.confirmPassword = "Passwords do not match";
+        isValid = false;
+      }
+
+      if (!isValid) {
+        setPasswordErrors(newErrors);
+        return;
+      }
+
+      const user = auth.currentUser;
+      if (!user) throw new Error("No authenticated user");
+
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        passwordData.currentPassword
+      );
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, passwordData.newPassword);
+
+      setSnackbar({
+        open: true,
+        message: "Password changed successfully!",
+        severity: "success",
+      });
+      setChangePasswordMode(false);
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error) {
+      console.error("Error changing password:", error);
+      let message = "Failed to change password";
+      if (error.code === "auth/wrong-password") {
+        message = "Current password is incorrect";
+        setPasswordErrors((prev) => ({
+          ...prev,
+          currentPassword: message,
+        }));
+      } else if (error.code === "auth/weak-password") {
+        message = "Password should be at least 6 characters";
+        setPasswordErrors((prev) => ({
+          ...prev,
+          newPassword: message,
+        }));
+      }
+      setSnackbar({
+        open: true,
+        message,
+        severity: "error",
+      });
+    }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   if (loading) {
     return (
       <Box
@@ -89,7 +326,7 @@ const Profile = () => {
           justifyContent: "center",
           alignItems: "center",
           height: "100vh",
-          backgroundColor: "#0f1728",
+          backgroundColor: "#fff",
         }}
       >
         <CircularProgress size={60} />
@@ -130,12 +367,11 @@ const Profile = () => {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
       style={{
-        backgroundColor: "#0f1728",
         height: "100%",
         paddingRight: "10px",
         paddingLeft: "10px",
         paddingTop: "0px",
-        borderRadius: "30px",
+        borderRadius: "10px",
         paddingBottom: "20px",
       }}
     >
@@ -146,7 +382,6 @@ const Profile = () => {
           margin: "0 auto",
         }}
       >
-        {/* Header Section */}
         <Box
           sx={{
             display: "flex",
@@ -159,11 +394,11 @@ const Profile = () => {
             variant="h3"
             sx={{
               fontFamily: "Raleway-Bold, sans-serif",
-              color: "#fff",
+              color: "#0f1728",
               fontSize: { xs: "1.8rem", md: "2.5rem" },
             }}
           >
-            My Profile
+            Profile
           </Typography>
           <Button
             variant="outlined"
@@ -183,17 +418,15 @@ const Profile = () => {
           </Button>
         </Box>
 
-        {/* Profile Content */}
         <Grid container spacing={3}>
-          {/* Left Column - Avatar and Status */}
           <Grid item xs={12} md={4}>
             <Box
               sx={{
                 backgroundColor: "#1e293b",
                 color: "#fff",
                 padding: "25px",
-                borderRadius: "12px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+                borderRadius: "40px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -206,7 +439,7 @@ const Profile = () => {
                   height: 150,
                   marginBottom: 3,
                   fontSize: "3rem",
-                  border: `4px solid #4e73df`,
+                  border: `5px solid #0f1728`,
                 }}
                 alt={userData.displayName}
                 src={userData.photoURL || undefined}
@@ -219,13 +452,14 @@ const Profile = () => {
               <Button
                 variant="contained"
                 startIcon={<FaEdit />}
+                onClick={handleEditClick}
                 sx={{
                   borderRadius: "8px",
                   width: "100%",
                   maxWidth: "200px",
-                  backgroundColor: "#4e73df",
+                  backgroundColor: "#0f1728",
                   "&:hover": {
-                    backgroundColor: "#3b5ab5",
+                    backgroundColor: "#384561",
                   },
                 }}
               >
@@ -241,7 +475,7 @@ const Profile = () => {
                   borderRadius: "8px",
                 }}
               >
-                <Typography variant="h6" sx={{ mb: 1, fontWeight: "bold" }}>
+                <Typography variant="h6" sx={{ mb: 1, fontWeight: "bold", fontFamily: "Raleway, sans-serif", }}>
                   Account Status
                 </Typography>
                 <Chip
@@ -257,23 +491,21 @@ const Profile = () => {
             </Box>
           </Grid>
 
-          {/* Right Column - Profile Info */}
           <Grid item xs={12} md={8}>
-            {/* Personal Information Box */}
             <Box
               sx={{
                 backgroundColor: "#1e293b",
                 color: "#fff",
                 padding: "25px",
-                borderRadius: "12px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+                borderRadius: "40px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
                 mb: 3,
               }}
             >
               <Typography
                 variant="h5"
                 sx={{
-                  fontFamily: "Raleway-Bold, sans-serif",
+                  fontFamily: "Raleway, sans-serif",
                   mb: 3,
                   color: "#fff",
                 }}
@@ -318,7 +550,7 @@ const Profile = () => {
                     color="#36b9cc"
                   />
                 </Grid>
-                <Grid item xs={12} md={60}>
+                <Grid item xs={12} md={30}>
                   <InfoBox
                     icon={<FaEnvelope style={{ color: "#1cc88a" }} />}
                     title="Email Address"
@@ -326,25 +558,23 @@ const Profile = () => {
                     color="#1cc88a"
                   />
                 </Grid>
-              
               </Grid>
             </Box>
 
-            {/* Account Settings Box */}
             <Box
               sx={{
                 backgroundColor: "#1e293b",
                 color: "#fff",
                 padding: "25px",
-                borderRadius: "12px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+                borderRadius: "40px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
                 height: "35%",
               }}
             >
               <Typography
                 variant="h5"
                 sx={{
-                  fontFamily: "Raleway-Bold, sans-serif",
+                  fontFamily: "Raleway, sans-serif",
                   mb: 3,
                   color: "#fff",
                 }}
@@ -353,9 +583,16 @@ const Profile = () => {
               </Typography>
 
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <SettingButton title="Change Password" color="#4e73df" />
-                </Grid>
+                {/* Only show Change Password for email/password users */}
+                {authProvider !== "google.com" && (
+                  <Grid item xs={12} sm={6}>
+                    <SettingButton
+                      title="Change Password"
+                      color="#4e73df"
+                      onClick={() => setChangePasswordMode(true)}
+                    />
+                  </Grid>
+                )}
                 <Grid item xs={12} sm={6}>
                   <SettingButton
                     title="Notification Settings"
@@ -366,18 +603,395 @@ const Profile = () => {
                   <SettingButton title="Privacy Settings" color="#f6c23e" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <SettingButton title="Connected Apps" color="#36b9cc" />
+                  <SettingButton title="Your Activity" color="#36b9cc" />
                 </Grid>
               </Grid>
             </Box>
           </Grid>
         </Grid>
       </Box>
+
+      {authProvider !== "google.com" && (
+        <Dialog
+          open={changePasswordMode}
+          onClose={() => setChangePasswordMode(false)}
+          fullWidth
+          maxWidth="sm"
+          sx={{
+            "& .MuiDialog-paper": {
+              backgroundColor: "#0f1728",
+              color: "#fff",
+              borderRadius: "30px",
+              fontFamily: "Raleway, sans-serif",
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              fontFamily: "Raleway, sans-serif",
+              fontWeight: "bold",
+            }}
+          >
+            Change Password
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2 }}>
+              <TextField
+                fullWidth
+                required
+                type={showPassword.current ? "text" : "password"}
+                label="Current Password"
+                name="currentPassword"
+                value={passwordData.currentPassword}
+                onChange={handlePasswordInputChange}
+                sx={{
+                  mb: 3,
+                  borderRadius: "40px",
+                  backgroundColor: "#1e293b",
+                  "& .MuiInputLabel-root": {
+                    color: "#fff",
+                    fontFamily: "Raleway, sans-serif",
+                    "&.Mui-focused": {
+                      color: "#1e293b",
+                    },
+                  },
+                }}
+                InputLabelProps={{
+                  sx: { color: "#fff !important" },
+                }}
+                InputProps={{
+                  sx: {
+                    color: "#fff",
+                    borderRadius: "40px",
+                    fontFamily: "Raleway, sans-serif",
+                  },
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="toggle password visibility"
+                        onClick={() => handleClickShowPassword("current")}
+                        onMouseDown={handleMouseDownPassword}
+                        edge="end"
+                        sx={{ color: "rgba(255,255,255,0.3)" }}
+                      >
+                        {showPassword.current ? <FaEyeSlash /> : <FaEye />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                error={!!passwordErrors.currentPassword}
+                helperText={passwordErrors.currentPassword}
+              />
+
+              <TextField
+                fullWidth
+                required
+                type={showPassword.new ? "text" : "password"}
+                label="New Password"
+                name="newPassword"
+                value={passwordData.newPassword}
+                onChange={handlePasswordInputChange}
+                sx={{
+                  borderRadius: "40px",
+                  mb: 3,
+                  backgroundColor: "#1e293b",
+                  "& .MuiInputLabel-root": {
+                    color: "#fff",
+                    fontFamily: "Raleway, sans-serif",
+                    "&.Mui-focused": {
+                      color: "#1e293b",
+                    },
+                  },
+                }}
+                InputLabelProps={{
+                  sx: { color: "#fff !important" },
+                }}
+                InputProps={{
+                  sx: {
+                    borderRadius: "40px",
+                    color: "#fff",
+                    fontFamily: "Raleway, sans-serif",
+                  },
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="toggle password visibility"
+                        onClick={() => handleClickShowPassword("new")}
+                        onMouseDown={handleMouseDownPassword}
+                        edge="end"
+                        sx={{ color: "rgba(255,255,255,0.3)" }}
+                      >
+                        {showPassword.new ? <FaEyeSlash /> : <FaEye />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                error={!!passwordErrors.newPassword}
+                helperText={passwordErrors.newPassword}
+              />
+
+              <TextField
+                fullWidth
+                required
+                type={showPassword.confirm ? "text" : "password"}
+                label="Confirm New Password"
+                name="confirmPassword"
+                value={passwordData.confirmPassword}
+                onChange={handlePasswordInputChange}
+                sx={{
+                  borderRadius: "40px",
+                  mb: 3,
+                  backgroundColor: "#1e293b",
+                  "& .MuiInputLabel-root": {
+                    color: "#fff",
+                    fontFamily: "Raleway, sans-serif",
+                    "&.Mui-focused": {
+                      color: "#1e293b",
+                    },
+                  },
+                }}
+                InputLabelProps={{
+                  sx: { color: "#fff !important" },
+                }}
+                InputProps={{
+                  sx: {
+                    borderRadius: "40px",
+                    color: "#fff",
+                    fontFamily: "Raleway, sans-serif",
+                  },
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="toggle password visibility"
+                        onClick={() => handleClickShowPassword("confirm")}
+                        onMouseDown={handleMouseDownPassword}
+                        edge="end"
+                        sx={{ color: "rgba(255,255,255,0.3)" }}
+                      >
+                        {showPassword.confirm ? <FaEyeSlash /> : <FaEye />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                error={!!passwordErrors.confirmPassword}
+                helperText={passwordErrors.confirmPassword}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setChangePasswordMode(false);
+                setPasswordData({
+                  currentPassword: "",
+                  newPassword: "",
+                  confirmPassword: "",
+                });
+                setPasswordErrors({
+                  currentPassword: "",
+                  newPassword: "",
+                  confirmPassword: "",
+                });
+                setShowPassword({
+                  current: false,
+                  new: false,
+                  confirm: false,
+                });
+              }}
+              sx={{
+                color: "#fff",
+                fontFamily: "Raleway, sans-serif",
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              variant="contained"
+              sx={{
+                backgroundColor: "green",
+                color: "#fff",
+                fontFamily: "Raleway, sans-serif",
+              }}
+            >
+              Change Password
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      <Dialog
+        open={editMode}
+        onClose={() => setEditMode(false)}
+        fullWidth
+        maxWidth="sm"
+        sx={{
+          "& .MuiDialog-paper": {
+            backgroundColor: "#0f1728",
+            color: "#fff",
+            borderRadius: "30px",
+            fontFamily: "Raleway, sans-serif",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{ fontFamily: "Raleway, sans-serif", fontWeight: "bold" }}
+        >
+          Edit Profile
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              required
+              label="Full Name"
+              name="displayName"
+              value={editedData.displayName}
+              onChange={handleInputChange}
+              sx={{
+                borderRadius: "40px",
+                mb: 3,
+                backgroundColor: "#1e293b",
+                "& .MuiInputLabel-root": {
+                  color: "#fff",
+                  fontFamily: "Raleway, sans-serif",
+                  "&.Mui-focused": {
+                    color: "#1e293b",
+                  },
+                },
+              }}
+              InputLabelProps={{
+                sx: { color: "#fff !important" },
+              }}
+              InputProps={{
+                sx: {
+                  borderRadius: "40px",
+                  color: "#fff",
+                  fontFamily: "Raleway, sans-serif",
+                },
+              }}
+              error={!editedData.displayName.trim()}
+              helperText={
+                !editedData.displayName.trim() ? "Full name is required" : ""
+              }
+            />
+
+            <TextField
+              fullWidth
+              required
+              label="Username"
+              name="username"
+              value={editedData.username}
+              onChange={handleInputChange}
+              sx={{
+                borderRadius: "40px",
+                mb: 3,
+                backgroundColor: "#1e293b",
+                "& .MuiInputLabel-root": {
+                  color: "#fff",
+                  "&.Mui-focused": {
+                    color: "#1e293b",
+                  },
+                },
+              }}
+              InputLabelProps={{
+                sx: { color: "#fff !important", fontFamily: "Raleway, sans-serif", },
+              }}
+              InputProps={{
+                sx: {
+                  borderRadius: "40px",
+                  color: "#fff",
+                  fontFamily: "Raleway, sans-serif",
+                },
+                startAdornment: (
+                  <Typography sx={{ mr: 0, color: "#fff" }}>@</Typography>
+                ),
+              }}
+              error={!editedData.username.trim()}
+              helperText={
+                !editedData.username.trim() ? "Username is required" : ""
+              }
+            />
+            <TextField
+              fullWidth
+              label="Email"
+              name="email"
+              value={editedData.email}
+              onChange={handleInputChange}
+              disabled
+              sx={{
+                borderRadius: "40px",
+                mb: 3,
+                backgroundColor: "#1e293b",
+                "& .MuiInputLabel-root": {
+                  color: "#fff",
+                  "&.Mui-focused": {
+                    color: "#1e293b",
+                  },
+                },
+                "& .MuiInputBase-root.Mui-disabled": {
+                  color: "#fff",
+                  "& .Mui-disabled": {
+                    WebkitTextFillColor: "#919191",
+                    fontFamily: "Raleway, sans-serif",
+                  },
+                },
+              }}
+              InputLabelProps={{
+                sx: { color: "#fff !important", fontFamily: "Raleway, sans-serif", },
+              }}
+              InputProps={{
+                sx: {
+                  color: "#fff",
+                  "&::before": { borderBottomColor: "#fff" },
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setEditMode(false)}
+            sx={{
+              color: "#fff",
+              fontFamily: "Raleway, sans-serif",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveChanges}
+            variant="contained"
+            startIcon={<FaSave />}
+            sx={{
+              backgroundColor: "green",
+              color: "#fff",
+              fontFamily: "Raleway, sans-serif",
+            }}
+          >
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={handleSnackbarClose}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </motion.div>
   );
 };
 
-// Reusable Info Box Component
 const InfoBox = ({ icon, title, value, color }) => (
   <Box
     sx={{
@@ -409,18 +1023,21 @@ const InfoBox = ({ icon, title, value, color }) => (
       <Typography variant="subtitle2" sx={{ color: "#94a3b8" }}>
         {title}
       </Typography>
-      <Typography variant="h6" sx={{ color: "#fff" }}>
+      <Typography
+        variant="h6"
+        sx={{ color: "#fff", fontFamily: "Raleway, sans-serif" }}
+      >
         {value}
       </Typography>
     </Box>
   </Box>
 );
 
-// Reusable Setting Button Component
-const SettingButton = ({ title, color }) => (
+const SettingButton = ({ title, color, onClick }) => (
   <Button
     fullWidth
     variant="outlined"
+    onClick={onClick}
     sx={{
       p: 2,
       borderRadius: "8px",

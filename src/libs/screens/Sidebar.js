@@ -18,15 +18,14 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
     },
   ];
 
-  // Animation variants
   const sidebarVariants = {
     open: { width: 240 },
-    closed: { width: 80 }
+    closed: { width: 80 },
   };
 
   const buttonVariants = {
     open: { opacity: 1, x: 0 },
-    closed: { opacity: 0, x: -20 }
+    closed: { opacity: 0, x: -20 },
   };
 
   return (
@@ -35,7 +34,7 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
       animate={isOpen ? "open" : "closed"}
       variants={sidebarVariants}
       style={{
-        height: "100vh",
+        height: "99vh",
         backgroundColor: "#0f1728",
         color: "#fff",
         display: "flex",
@@ -47,13 +46,15 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
         zIndex: 1000,
         overflowX: "hidden",
         boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+        borderTopRightRadius: "30px",
+        borderBottomRightRadius: "30px",
       }}
     >
       <Button
         onClick={toggleSidebar}
         sx={{
           color: "#fff",
-          minWidth: "40px",
+          minWidth: "50px",
           alignSelf: "flex-start",
           marginLeft: "15px",
           marginBottom: "30px",
