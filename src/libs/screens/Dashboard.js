@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Button,
-  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -28,102 +27,49 @@ import {
   FaEdit,
   FaTrash,
   FaDirections,
-  FaSave,
   FaLocationArrow,
 } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import {
   collection,
-  addDoc,
   getDocs,
   doc,
   deleteDoc,
   updateDoc,
 } from "firebase/firestore";
-import {
-  LoadScript,
-  GoogleMap,
-  DirectionsRenderer,
-  Marker,
-} from "@react-google-maps/api";
+import { LoadScript, GoogleMap, Marker } from "@react-google-maps/api";
+import { TrafficLayer } from "@react-google-maps/api";
 
 const mapContainerStyle = {
   width: "100%",
-  height: "500px",
-  borderRadius: "8px",
+  height: "700px",
+  borderRadius: "30px",
 };
 
-const DEFAULT_CENTER = {
-  lat: 39.8283,
-  lng: -98.5795,
+// Center on Pakistan by default
+const PAKISTAN_CENTER = {
+  lat: 30.3753,
+  lng: 69.3451,
 };
 
-const libraries = ["places", "directions"];
+const libraries = ["places"];
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [openDialog, setOpenDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
-  const [directions, setDirections] = useState(null);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [editingRoute, setEditingRoute] = useState(null);
-  const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
-  const [userPosition, setUserPosition] = useState(null);
-  const [locationPermission, setLocationPermission] = useState(false);
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [locationError, setLocationError] = useState(null);
+  const [mapCenter, setMapCenter] = useState(PAKISTAN_CENTER);
 
   const openMenu = Boolean(anchorEl);
-
-  const [routeForm, setRouteForm] = useState({
-    id: "",
-    name: "",
-    origin: "",
-    destination: "",
-    waypoints: [],
-    status: "active",
-  });
-
-  const requestLocationPermission = () => {
-    setLocationLoading(true);
-    setLocationError(null);
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const pos = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-          setMapCenter(pos);
-          setUserPosition(pos);
-          setLocationPermission(true);
-          setLocationLoading(false);
-        },
-        (error) => {
-          setLocationError(error.message);
-          setLocationPermission(false);
-          setLocationLoading(false);
-          console.error("Geolocation error:", error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 0,
-        }
-      );
-    } else {
-      setLocationError("Geolocation is not supported by this browser");
-      setLocationLoading(false);
-    }
-  };
 
   const fetchRoutes = useCallback(async () => {
     try {
@@ -159,20 +105,6 @@ const Dashboard = () => {
     setAnchorEl(null);
   };
 
-  const handleEditRoute = () => {
-    setEditingRoute(selectedRoute);
-    setRouteForm({
-      id: selectedRoute.id,
-      name: selectedRoute.name,
-      origin: selectedRoute.origin,
-      destination: selectedRoute.destination,
-      waypoints: selectedRoute.waypoints,
-      status: selectedRoute.status,
-    });
-    setOpenDialog(true);
-    handleMenuClose();
-  };
-
   const handleDeleteRoute = async () => {
     try {
       await deleteDoc(doc(db, "routes", selectedRoute.id));
@@ -182,9 +114,6 @@ const Dashboard = () => {
         message: "Route deleted successfully",
         severity: "success",
       });
-      if (directions && selectedRoute.id === directions.request.routeId) {
-        setDirections(null);
-      }
     } catch (error) {
       console.error("Error deleting route: ", error);
       setSnackbar({
@@ -197,113 +126,8 @@ const Dashboard = () => {
   };
 
   const handleAddRoute = () => {
-    setEditingRoute(null);
-    setRouteForm({
-      id: "",
-      name: "",
-      origin: "",
-      destination: "",
-      waypoints: [],
-      status: "active",
-    });
-    setOpenDialog(true);
+    navigate("/dashboard/routes");
   };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setRouteForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmitRoute = async () => {
-    try {
-      if (!routeForm.name || !routeForm.origin || !routeForm.destination) {
-        setSnackbar({
-          open: true,
-          message: "Please fill all required fields",
-          severity: "warning",
-        });
-        return;
-      }
-
-      const routeData = {
-        name: routeForm.name,
-        origin: routeForm.origin,
-        destination: routeForm.destination,
-        waypoints: routeForm.waypoints,
-        status: routeForm.status,
-        updatedAt: new Date(),
-      };
-
-      if (editingRoute) {
-        await updateDoc(doc(db, "routes", routeForm.id), routeData);
-        setSnackbar({
-          open: true,
-          message: "Route updated successfully",
-          severity: "success",
-        });
-      } else {
-        routeData.createdAt = new Date();
-        await addDoc(collection(db, "routes"), routeData);
-        setSnackbar({
-          open: true,
-          message: "Route added successfully",
-          severity: "success",
-        });
-      }
-
-      fetchRoutes();
-      handleCloseDialog();
-    } catch (error) {
-      console.error("Error saving route: ", error);
-      setSnackbar({
-        open: true,
-        message: "Failed to save route",
-        severity: "error",
-      });
-    }
-  };
-
-  const fetchDirections = useCallback(
-    (route) => {
-      if (!mapLoaded || !route.origin || !route.destination) return;
-
-      const directionsService = new window.google.maps.DirectionsService();
-
-      directionsService.route(
-        {
-          origin: route.origin,
-          destination: route.destination,
-          waypoints: route.waypoints.map((wp) => ({
-            location: wp,
-            stopover: true,
-          })),
-          travelMode: window.google.maps.TravelMode.DRIVING,
-          routeId: route.id,
-        },
-        (result, status) => {
-          if (status === window.google.maps.DirectionsStatus.OK) {
-            setDirections(result);
-            setSelectedRoute(route);
-          } else {
-            console.error(`Error fetching directions: ${status}`);
-            setSnackbar({
-              open: true,
-              message: "Failed to load directions",
-              severity: "error",
-            });
-          }
-        }
-      );
-    },
-    [mapLoaded]
-  );
 
   const handleMapLoad = () => {
     setMapLoaded(true);
@@ -313,21 +137,13 @@ const Dashboard = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const centerOnUserLocation = () => {
-    if (userPosition) {
-      setMapCenter(userPosition);
-    } else {
-      requestLocationPermission();
-    }
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <>
+      <Box>
         <Typography
           variant="h4"
           sx={{
@@ -340,33 +156,6 @@ const Dashboard = () => {
           Route Management <FaRoute style={{ marginLeft: "10px" }} />
         </Typography>
 
-        {}
-        {!locationPermission && (
-          <Box sx={{ mb: 3, p: 2, bgcolor: "#f5f5f5", borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Location Access Required
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              To view your current location on the map, please grant location
-              permissions.
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={requestLocationPermission}
-              disabled={locationLoading}
-              startIcon={<FaLocationArrow />}
-            >
-              {locationLoading ? "Requesting..." : "Allow Location Access"}
-            </Button>
-            {locationError && (
-              <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                Error: {locationError}
-              </Typography>
-            )}
-          </Box>
-        )}
-
-        {}
         <Box
           sx={{
             display: "grid",
@@ -395,7 +184,7 @@ const Dashboard = () => {
             icon={<FaMapMarkerAlt />}
             title="Total Waypoints"
             value={routes.reduce(
-              (acc, route) => acc + route.waypoints.length,
+              (acc, route) => acc + (route.waypoints?.length || 0),
               0
             )}
             color="#f6c23e"
@@ -450,7 +239,6 @@ const Dashboard = () => {
           </Box>
         </Box>
 
-        {}
         <Box
           sx={{
             display: "flex",
@@ -459,7 +247,6 @@ const Dashboard = () => {
             marginBottom: "30px",
           }}
         >
-          {}
           <Box
             sx={{
               flex: 1,
@@ -526,7 +313,7 @@ const Dashboard = () => {
                 {routes.map((route) => (
                   <li
                     key={route.id}
-                    onClick={() => fetchDirections(route)}
+                    onClick={() => setSelectedRoute(route)}
                     style={{
                       backgroundColor:
                         selectedRoute?.id === route.id
@@ -551,7 +338,7 @@ const Dashboard = () => {
                       <Typography variant="body2" color="text.secondary">
                         {route.origin} → {route.destination}
                       </Typography>
-                      {route.waypoints.length > 0 && (
+                      {route.waypoints?.length > 0 && (
                         <Typography variant="caption" color="text.secondary">
                           {route.waypoints.length} waypoint
                           {route.waypoints.length !== 1 ? "s" : ""}
@@ -574,7 +361,6 @@ const Dashboard = () => {
             )}
           </Box>
 
-          {}
           <Box
             sx={{
               flex: 2,
@@ -597,65 +383,70 @@ const Dashboard = () => {
                 variant="h6"
                 sx={{ fontFamily: "Raleway, sans-serif" }}
               >
-                {selectedRoute ? selectedRoute.name : "Route Visualization"}
+                {selectedRoute
+                  ? `${selectedRoute.name} Origin`
+                  : "Route Origins"}
               </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<FaLocationArrow />}
-                onClick={centerOnUserLocation}
-                size="small"
-              >
-                My Location
-              </Button>
             </Box>
 
             <LoadScript
               googleMapsApiKey="AIzaSyByATEojq4YfKfzIIrRFA_1sAkKNKsnNeQ"
               libraries={libraries}
               onLoad={handleMapLoad}
-              onError={() => {
-                console.error("Google Maps failed to load");
-                setSnackbar({
-                  open: true,
-                  message: "Failed to load Google Maps. Check your API key.",
-                  severity: "error",
-                });
-              }}
             >
               {mapLoaded ? (
                 <GoogleMap
                   mapContainerStyle={mapContainerStyle}
                   center={mapCenter}
-                  zoom={locationPermission ? 12 : 5}
+                  zoom={6}
                   options={{
-                    streetViewControl: false,
-                    mapTypeControl: false,
-                    fullscreenControl: false,
+                    streetViewControl: true,
+                    mapTypeControl: true,
+                    fullscreenControl: true,
+                    mapTypeId: "hybrid", // This enables satellite view with labels
+                    styles: [
+                      {
+                        featureType: "all",
+                        elementType: "labels",
+                        stylers: [{ visibility: "on" }], // Ensure labels are visible
+                      },
+                    ],
                   }}
                 >
-                  {userPosition && (
-                    <Marker
-                      position={userPosition}
-                      icon={{
-                        path: window.google.maps.SymbolPath.CIRCLE,
-                        scale: 8,
-                        fillColor: "#4285F4",
-                        fillOpacity: 1,
-                        strokeWeight: 2,
-                        strokeColor: "white",
-                      }}
-                      title="Your Location"
-                    />
+                  {/* Traffic layer */}
+                  {mapLoaded && (
+                    <div>
+                      <TrafficLayer autoUpdate />
+                    </div>
                   )}
-                  {directions && (
-                    <DirectionsRenderer
-                      directions={directions}
-                      options={{
-                        polylineOptions: {
-                          strokeColor: "#4e73df",
-                          strokeWeight: 5,
-                        },
+
+                  {/* Rest of your markers */}
+                  {routes.map((route) => {
+                    if (!route.originCoordinates) return null;
+
+                    return (
+                      <Marker
+                        key={route.id}
+                        position={{
+                          lat: route.originCoordinates.latitude,
+                          lng: route.originCoordinates.longitude,
+                        }}
+                        title={`${route.name} (Origin)`}
+                        onClick={() => setSelectedRoute(route)}
+                      />
+                    );
+                  })}
+
+                  {selectedRoute?.originCoordinates && (
+                    <Marker
+                      position={{
+                        lat: selectedRoute.originCoordinates.latitude,
+                        lng: selectedRoute.originCoordinates.longitude,
                       }}
+                      icon={{
+                        url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+                      }}
+                      title={`${selectedRoute.name} (Selected Origin)`}
                     />
                   )}
                 </GoogleMap>
@@ -689,8 +480,16 @@ const Dashboard = () => {
                 >
                   <DetailItem label="Origin" value={selectedRoute.origin} />
                   <DetailItem
-                    label="Destination"
-                    value={selectedRoute.destination}
+                    label="Coordinates"
+                    value={
+                      selectedRoute.originCoordinates
+                        ? `${selectedRoute.originCoordinates.latitude?.toFixed(
+                            6
+                          )}, ${selectedRoute.originCoordinates.longitude?.toFixed(
+                            6
+                          )}`
+                        : "Not available"
+                    }
                   />
                   <DetailItem
                     label="Status"
@@ -708,33 +507,14 @@ const Dashboard = () => {
                   />
                   <DetailItem
                     label="Waypoints"
-                    value={`${selectedRoute.waypoints.length} stops`}
+                    value={`${selectedRoute.waypoints?.length || 0} stops`}
                   />
                 </Box>
-
-                {selectedRoute.waypoints.length > 0 && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Waypoints:
-                    </Typography>
-                    <Box component="ul" sx={{ pl: 2, mb: 0 }}>
-                      {selectedRoute.waypoints.map((wp, index) => (
-                        <Box
-                          component="li"
-                          key={`${selectedRoute.id}-wp-${index}`}
-                        >
-                          <Typography variant="body2">{wp}</Typography>
-                        </Box>
-                      ))}
-                    </Box>
-                  </Box>
-                )}
               </Box>
             )}
           </Box>
         </Box>
 
-        {}
         <Menu
           anchorEl={anchorEl}
           open={openMenu}
@@ -750,16 +530,23 @@ const Dashboard = () => {
         >
           <MenuItem
             onClick={() => {
-              fetchDirections(selectedRoute);
+              if (selectedRoute?.originCoordinates) {
+                setMapCenter({
+                  lat: selectedRoute.originCoordinates.latitude,
+                  lng: selectedRoute.originCoordinates.longitude,
+                });
+              }
               handleMenuClose();
             }}
           >
             <ListItemIcon>
-              <FaDirections />
+              <FaMapMarkerAlt />
             </ListItemIcon>
-            <ListItemText>Show Directions</ListItemText>
+            <ListItemText>View Origin</ListItemText>
           </MenuItem>
-          <MenuItem onClick={handleEditRoute}>
+          <MenuItem
+            onClick={() => navigate(`/dashboard/routes/${selectedRoute?.id}`)}
+          >
             <ListItemIcon>
               <FaEdit />
             </ListItemIcon>
@@ -773,99 +560,6 @@ const Dashboard = () => {
           </MenuItem>
         </Menu>
 
-        {}
-        <Dialog
-          open={openDialog}
-          onClose={handleCloseDialog}
-          fullWidth
-          maxWidth="sm"
-        >
-          <DialogTitle>
-            {editingRoute ? "Edit Route" : "Add New Route"}
-          </DialogTitle>
-          <DialogContent dividers>
-            <TextField
-              autoFocus
-              margin="dense"
-              name="name"
-              label="Route Name"
-              type="text"
-              fullWidth
-              variant="outlined"
-              value={routeForm.name}
-              onChange={handleInputChange}
-              sx={{ mb: 2 }}
-              required
-            />
-            <TextField
-              margin="dense"
-              name="origin"
-              label="Origin Address"
-              type="text"
-              fullWidth
-              variant="outlined"
-              value={routeForm.origin}
-              onChange={handleInputChange}
-              sx={{ mb: 2 }}
-              required
-            />
-            <TextField
-              margin="dense"
-              name="destination"
-              label="Destination Address"
-              type="text"
-              fullWidth
-              variant="outlined"
-              value={routeForm.destination}
-              onChange={handleInputChange}
-              sx={{ mb: 2 }}
-              required
-            />
-            <Typography variant="subtitle2" sx={{ mt: 1, mb: 1 }}>
-              Waypoints (Add one per line)
-            </Typography>
-            <TextField
-              margin="dense"
-              name="waypoints"
-              label="Waypoints"
-              type="text"
-              fullWidth
-              variant="outlined"
-              multiline
-              rows={4}
-              placeholder="Address 1\nAddress 2\n..."
-              value={routeForm.waypoints.join("\n")}
-              onChange={(e) => {
-                const waypoints = e.target.value
-                  .split("\n")
-                  .map((wp) => wp.trim())
-                  .filter((wp) => wp !== "");
-                setRouteForm((prev) => ({
-                  ...prev,
-                  waypoints,
-                }));
-              }}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button sx={{ color: "red" }} onClick={handleCloseDialog}>
-              Cancel
-            </Button>
-            <Button
-              sx={{ backgroundColor: "green", color: "white" }}
-              onClick={handleSubmitRoute}
-              variant="contained"
-              startIcon={editingRoute ? <FaSave /> : <FaPlus />}
-              disabled={
-                !routeForm.name || !routeForm.origin || !routeForm.destination
-              }
-            >
-              {editingRoute ? "Update Route" : "Add Route"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={6000}
@@ -880,7 +574,7 @@ const Dashboard = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
-      </>
+      </Box>
     </motion.div>
   );
 };

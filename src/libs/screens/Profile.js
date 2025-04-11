@@ -14,6 +14,12 @@ import {
   TextField,
   Snackbar,
   Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  IconButton,
+  InputAdornment,
 } from "@mui/material";
 import { auth, db } from "../firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -24,6 +30,9 @@ import {
   FaCalendarAlt,
   FaSignOutAlt,
   FaSave,
+  FaEye,
+  FaEyeSlash,
+  FaHistory,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -33,8 +42,215 @@ import {
   reauthenticateWithCredential,
   updatePassword,
 } from "firebase/auth";
-import { IconButton, InputAdornment } from "@mui/material";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+
+const ActivityDialog = ({ open, onClose, loginActivities }) => {
+  const [sortNewestFirst, setSortNewestFirst] = useState(true);
+
+  const toggleSortOrder = () => {
+    setSortNewestFirst(!sortNewestFirst);
+  };
+
+  const formatDateWithTextMonth = (dateString) => {
+    const date = new Date(dateString);
+    const options = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    };
+    return date.toLocaleDateString('en-US', options);
+  };
+
+  const sortedActivities = [...loginActivities].sort((a, b) => {
+    return sortNewestFirst
+      ? new Date(b.timestamp) - new Date(a.timestamp)
+      : new Date(a.timestamp) - new Date(b.timestamp);
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      sx={{
+        "& .MuiDialog-paper": {
+          backgroundColor: "#0f1728",
+          color: "#fff",
+          borderRadius: "30px",
+          fontFamily: "Raleway, sans-serif",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{ fontFamily: "Raleway, sans-serif", fontWeight: "bold" }}
+      >
+        <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Box display="flex" alignItems="center">
+            <FaHistory style={{ marginRight: "10px" }} />
+            Your Login Activity
+          </Box>
+          {loginActivities && loginActivities.length > 0 && (
+            <Button
+              onClick={toggleSortOrder}
+              variant="outlined"
+              size="small"
+              sx={{
+                color: "#fff",
+                borderColor: "#334155",
+                fontFamily: "Raleway, sans-serif",
+                fontSize: "0.75rem",
+                "&:hover": {
+                  borderColor: "#64748b",
+                },
+              }}
+            >
+              {sortNewestFirst ? "Oldest → Newest" : "Newest → Oldest"}
+            </Button>
+          )}
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ mt: 2 }}>
+          {loginActivities && loginActivities.length > 0 ? (
+            <List sx={{ maxHeight: 400, overflow: "auto" }}>
+              {sortedActivities.map((activity, index) => (
+                <React.Fragment key={index}>
+                  <ListItem>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        width: "100%",
+                        flexDirection: "column",
+                      }}
+                    >
+                      <Box sx={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        width: '100%'
+                      }}>
+                        <Box
+                          sx={{
+                            minWidth: "30px",
+                            textAlign: "right",
+                            marginRight: "15px",
+                            color: "#94a3b8",
+                            fontFamily: "Raleway, sans-serif",
+                          }}
+                        >
+                          {sortNewestFirst
+                            ? index + 1
+                            : loginActivities.length - index}
+                          .
+                        </Box>
+                        <ListItemText
+                          primary={formatDateWithTextMonth(activity.timestamp)}
+                          secondary={
+                            <>
+                              <Box component="span" display="block">
+                                Device: {activity.device.type} {activity.device.model && `(${activity.device.model})`}
+                              </Box>
+                              <Box component="span" display="block">
+                                OS: {activity.device.os} | Browser: {activity.device.browser}
+                              </Box>
+                              <Box component="span" display="block">
+                                IP: {activity.ip || 'Not available'}
+                              </Box>
+                            </>
+                          }
+                          primaryTypographyProps={{
+                            fontFamily: "Calibri, sans-serif",
+                            color: "#fff"
+                          }}
+                          secondaryTypographyProps={{
+                            fontFamily: "Calibri, sans-serif",
+                            color: "#94a3b8",
+                            fontSize: "0.8rem"
+                          }}
+                        />
+                      </Box>
+                      {activity.location && (
+                        <Box sx={{ 
+                          marginLeft: '45px',
+                          color: '#64748b',
+                          fontSize: '0.75rem',
+                          fontFamily: 'Raleway, sans-serif'
+                        }}>
+                          Approximate location: {activity.location}
+                        </Box>
+                      )}
+                    </Box>
+                  </ListItem>
+                  {index < sortedActivities.length - 1 && (
+                    <Divider sx={{ backgroundColor: "#334155" }} />
+                  )}
+                </React.Fragment>
+              ))}
+            </List>
+          ) : (
+            <Typography fontFamily="Raleway, sans-serif">
+              No login activity recorded yet
+            </Typography>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={onClose}
+          sx={{
+            color: "#fff",
+            fontFamily: "Raleway, sans-serif",
+          }}
+        >
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const getDeviceInfo = () => {
+  const userAgent = navigator.userAgent;
+  let device = "Unknown device";
+
+  if (
+    /Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(
+      userAgent
+    )
+  ) {
+    device = "Mobile";
+    if (/Android/.test(userAgent)) device = "Android Device";
+    if (/iPhone|iPad|iPod/.test(userAgent)) device = "iOS Device";
+  } else {
+    device = "Desktop";
+    if (/Windows/.test(userAgent)) device = "Windows PC";
+    if (/Mac/.test(userAgent)) device = "Mac";
+    if (/Linux/.test(userAgent)) device = "Linux PC";
+  }
+
+  return device;
+};
+
+const getLocationFromIP = async (ip) => {
+  try {
+    const response = await fetch(`https://ipapi.co/${ip}/json/`);
+    const data = await response.json();
+    if (data.error) return null;
+
+    let location = "";
+    if (data.city) location += `${data.city}, `;
+    if (data.region) location += `${data.region}, `;
+    if (data.country_name) location += data.country_name;
+
+    return location || null;
+  } catch (error) {
+    console.error("Error fetching location:", error);
+    return null;
+  }
+};
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -68,6 +284,9 @@ const Profile = () => {
     new: false,
     confirm: false,
   });
+  const [activityDialogOpen, setActivityDialogOpen] = useState(false);
+  const [loginActivities, setLoginActivities] = useState([]);
+
   const handleClickShowPassword = (field) => {
     setShowPassword({ ...showPassword, [field]: !showPassword[field] });
   };
@@ -76,17 +295,53 @@ const Profile = () => {
     event.preventDefault();
   };
 
+  const fetchLoginActivity = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      let userRef;
+      const googleUserDoc = await getDoc(doc(db, "google", user.uid));
+      if (googleUserDoc.exists()) {
+        userRef = doc(db, "google", user.uid);
+      } else {
+        userRef = doc(db, "email", user.uid);
+      }
+
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        // Enhance activities with location data if not already present
+        const activities = userDoc.data().loginActivities || [];
+        const enhancedActivities = await Promise.all(
+          activities.map(async (activity) => {
+            if (activity.location || !activity.ip) return activity;
+
+            const location = await getLocationFromIP(activity.ip);
+            return location ? { ...activity, location } : activity;
+          })
+        );
+
+        setLoginActivities(enhancedActivities);
+      }
+    } catch (error) {
+      console.error("Error fetching login activity:", error);
+    }
+  };
+
+  const handleActivityClick = async () => {
+    await fetchLoginActivity();
+    setActivityDialogOpen(true);
+  };
+
   useEffect(() => {
     const fetchUserData = async () => {
       const userFromSession = JSON.parse(sessionStorage.getItem("user"));
 
       if (userFromSession) {
         setUserData(userFromSession);
-        // Determine auth provider from session data
         if (userFromSession.providerData && userFromSession.providerData[0]) {
           setAuthProvider(userFromSession.providerData[0].providerId);
         } else {
-          // Fallback for older session data
           const user = auth.currentUser;
           if (user && user.providerData && user.providerData[0]) {
             setAuthProvider(user.providerData[0].providerId);
@@ -97,7 +352,6 @@ const Profile = () => {
         const user = auth.currentUser;
         if (user) {
           try {
-            // Get auth provider info
             if (user.providerData && user.providerData[0]) {
               setAuthProvider(user.providerData[0].providerId);
             }
@@ -475,7 +729,14 @@ const Profile = () => {
                   borderRadius: "8px",
                 }}
               >
-                <Typography variant="h6" sx={{ mb: 1, fontWeight: "bold", fontFamily: "Raleway, sans-serif", }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 1,
+                    fontWeight: "bold",
+                    fontFamily: "Raleway, sans-serif",
+                  }}
+                >
                   Account Status
                 </Typography>
                 <Chip
@@ -485,7 +746,7 @@ const Profile = () => {
                   sx={{ borderRadius: "4px" }}
                 />
                 <Typography variant="body2" sx={{ mt: 2, color: "#94a3b8" }}>
-                  Last login: {new Date().toLocaleString()}
+                  Current device: {getDeviceInfo()}
                 </Typography>
               </Box>
             </Box>
@@ -583,7 +844,6 @@ const Profile = () => {
               </Typography>
 
               <Grid container spacing={2}>
-                {/* Only show Change Password for email/password users */}
                 {authProvider !== "google.com" && (
                   <Grid item xs={12} sm={6}>
                     <SettingButton
@@ -603,10 +863,21 @@ const Profile = () => {
                   <SettingButton title="Privacy Settings" color="#f6c23e" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <SettingButton title="Your Activity" color="#36b9cc" />
+                  <SettingButton
+                    title="Login Activity"
+                    color="#36b9cc"
+                    onClick={handleActivityClick}
+                  />
                 </Grid>
               </Grid>
             </Box>
+
+            {/* Activity Dialog */}
+            <ActivityDialog
+              open={activityDialogOpen}
+              onClose={() => setActivityDialogOpen(false)}
+              loginActivities={loginActivities}
+            />
           </Grid>
         </Grid>
       </Box>
@@ -895,7 +1166,10 @@ const Profile = () => {
                 },
               }}
               InputLabelProps={{
-                sx: { color: "#fff !important", fontFamily: "Raleway, sans-serif", },
+                sx: {
+                  color: "#fff !important",
+                  fontFamily: "Raleway, sans-serif",
+                },
               }}
               InputProps={{
                 sx: {
@@ -938,7 +1212,10 @@ const Profile = () => {
                 },
               }}
               InputLabelProps={{
-                sx: { color: "#fff !important", fontFamily: "Raleway, sans-serif", },
+                sx: {
+                  color: "#fff !important",
+                  fontFamily: "Raleway, sans-serif",
+                },
               }}
               InputProps={{
                 sx: {

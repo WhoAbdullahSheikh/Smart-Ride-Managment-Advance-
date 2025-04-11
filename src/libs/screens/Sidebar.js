@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Box, Button, Typography } from "@mui/material";
-import { FaBars, FaHome, FaUser, FaSignOutAlt } from "react-icons/fa";
+import { FaBars, FaHome, FaUser, FaRoute, FaUsers, FaSignOutAlt } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
@@ -10,6 +10,18 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
 
   const sidebarButtons = [
     { name: "Home", icon: <FaHome />, path: "/dashboard", color: "#4e73df" },
+    {
+      name: "Routes",
+      icon: <FaRoute />,
+      path: "/dashboard/routes",
+      color: "#cc9704",
+    },
+    {
+      name: "Users",
+      icon: <FaUsers />,
+      path: "/dashboard/users",
+      color: "#1cc88a",
+    },
     {
       name: "Profile",
       icon: <FaUser />,

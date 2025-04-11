@@ -35,6 +35,7 @@ const GoogleAuth = ({ openSnackbar, setOpenSnackbar, setSnackbarMessage, setSnac
             name: user.displayName,
             username: user.displayName.replace(/\s+/g, "").toLowerCase(),
             createdAt: serverTimestamp(),
+            photoURL: user.photoURL,
           },
           signUpMethods: ["Google"],
         });

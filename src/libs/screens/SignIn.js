@@ -10,9 +10,11 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
+import { UAParser } from 'ua-parser-js';
 import { FaEnvelope, FaLock } from "react-icons/fa";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
+import { arrayUnion, updateDoc } from "firebase/firestore";
 import backgroundImage from "../../assets/images/img.jpg";
 import { doc, getDoc } from "firebase/firestore";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
@@ -28,6 +30,45 @@ const SignIn = () => {
   const [snackbarSeverity, setSnackbarSeverity] = useState("error");
   const navigate = useNavigate();
 
+  const getDeviceInfo = () => {
+    const userAgent = navigator.userAgent;
+    const parser = new UAParser();
+    const result = parser.getResult();
+    
+    let deviceInfo = {
+      type: 'Unknown',
+      model: 'Unknown',
+      os: 'Unknown',
+      browser: 'Unknown'
+    };
+  
+    // Device type
+    if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent)) {
+      deviceInfo.type = 'Mobile';
+      if (/Android/.test(userAgent)) deviceInfo.type = 'Android';
+      if (/iPhone|iPad|iPod/.test(userAgent)) deviceInfo.type = 'iOS';
+    } else {
+      deviceInfo.type = 'Desktop';
+      if (/Windows/.test(userAgent)) deviceInfo.type = 'Windows PC';
+      if (/Mac/.test(userAgent)) deviceInfo.type = 'Mac';
+      if (/Linux/.test(userAgent)) deviceInfo.type = 'Linux PC';
+    }
+  
+    // Get detailed device info
+    if (result.device.model) {
+      deviceInfo.model = result.device.model;
+    }
+    
+    if (result.os.name) {
+      deviceInfo.os = `${result.os.name} ${result.os.version || ''}`.trim();
+    }
+    
+    if (result.browser.name) {
+      deviceInfo.browser = `${result.browser.name} ${result.browser.version || ''}`.trim();
+    }
+  
+    return deviceInfo;
+  };
   const handleEmailSignIn = async (e) => {
     e.preventDefault();
     setError("");
@@ -48,6 +89,24 @@ const SignIn = () => {
         throw new Error("Account not found in database");
       }
 
+      // Record login activity with device info
+      const loginActivity = {
+        timestamp: new Date().toISOString(),
+        device: {
+          type: getDeviceInfo().type,
+          model: getDeviceInfo().model,
+          os: getDeviceInfo().os,
+          browser: getDeviceInfo().browser
+        },
+        ip: await fetch('https://api.ipify.org?format=json')
+          .then(response => response.json())
+          .then(data => data.ip)
+          .catch(() => 'IP not available')
+      };
+      await updateDoc(emailUserRef, {
+        loginActivities: arrayUnion(loginActivity),
+      });
+
       const userData = emailUserDoc.data().userData || emailUserDoc.data();
 
       sessionStorage.setItem(
@@ -66,7 +125,6 @@ const SignIn = () => {
       setSnackbarMessage("Successfully logged in!");
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
-      console.log(userData);
 
       setTimeout(() => {
         navigate("/dashboard");
@@ -100,6 +158,20 @@ const SignIn = () => {
       const userSnapshot = await getDoc(userRef);
 
       if (userSnapshot.exists()) {
+        // Record login activity with device info
+        const loginActivity = {
+          timestamp: new Date().toISOString(),
+          device: getDeviceInfo(),
+          ip: await fetch("https://api.ipify.org?format=json")
+            .then((response) => response.json())
+            .then((data) => data.ip)
+            .catch(() => "IP not available"),
+        };
+
+        await updateDoc(userRef, {
+          loginActivities: arrayUnion(loginActivity),
+        });
+
         const userData = userSnapshot.data().userData || userSnapshot.data();
 
         sessionStorage.setItem(
@@ -115,7 +187,7 @@ const SignIn = () => {
             },
           })
         );
-        console.log(userData);
+
         setSnackbarMessage("Successfully logged in with Google!");
         setSnackbarSeverity("success");
         setOpenSnackbar(true);
@@ -136,7 +208,6 @@ const SignIn = () => {
       setOpenSnackbar(true);
     }
   };
-
   const handleCloseSnackbar = () => {
     setOpenSnackbar(false);
   };

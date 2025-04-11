@@ -1,11 +1,28 @@
-import React, { useState } from "react";
-import { Outlet } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { Box } from "@mui/material";
 import Sidebar from "../screens/Sidebar";
 
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeButton, setActiveButton] = useState("Home");
+  const location = useLocation();
+
+  // Sync active button with current route
+  useEffect(() => {
+    const pathToButtonMap = {
+      "/dashboard": "Home",
+      "/dashboard/profile": "Profile",
+      "/dashboard/routes": "Routes",
+      "/dashboard/users": "Users",
+    };
+    
+    const currentButton = Object.entries(pathToButtonMap).find(
+      ([path]) => location.pathname === path
+    )?.[1] || "Home";
+    
+    setActiveButton(currentButton);
+  }, [location.pathname]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -31,7 +48,7 @@ const DashboardLayout = () => {
           transition: "margin-left 0.3s ease",
         }}
       >
-        <Outlet /> {/* This is where nested routes will render */}
+        <Outlet />
       </Box>
     </Box>
   );
