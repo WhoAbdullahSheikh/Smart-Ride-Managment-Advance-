@@ -2,13 +2,34 @@ import React from "react";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { Button } from "@mui/material";
 import { auth, db } from "../firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, query, collection, where, getDocs } from "firebase/firestore";
 import GoogleLogo from "../../assets/svg/google.svg";
 import { useNavigate } from "react-router-dom";
 import { serverTimestamp } from "firebase/firestore";
 
 const GoogleAuth = ({ openSnackbar, setOpenSnackbar, setSnackbarMessage, setSnackbarSeverity }) => {
   const navigate = useNavigate();
+
+  const checkEmailExists = async (email) => {
+    try {
+      const emailQuery = query(
+        collection(db, "email"),
+        where("userData.email", "==", email)
+      );
+      const emailSnapshot = await getDocs(emailQuery);
+      
+      const googleQuery = query(
+        collection(db, "google"),
+        where("userData.email", "==", email)
+      );
+      const googleSnapshot = await getDocs(googleQuery);
+
+      return !emailSnapshot.empty || !googleSnapshot.empty;
+    } catch (error) {
+      console.error("Error checking email existence:", error);
+      return false;
+    }
+  };
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -17,14 +38,18 @@ const GoogleAuth = ({ openSnackbar, setOpenSnackbar, setSnackbarMessage, setSnac
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      console.log("User signed in with Google:", user);
+      const emailExists = await checkEmailExists(user.email);
+      if (emailExists) {
+        setSnackbarMessage("This email is already registered. Please sign in instead.");
+        setSnackbarSeverity("error");
+        setOpenSnackbar(true);
+        return;
+      }
 
       const userRef = doc(db, "google", user.uid);
       const userSnapshot = await getDoc(userRef);
 
       if (userSnapshot.exists()) {
-        console.log("Google user already exists in Firestore:", user.uid);
-
         setSnackbarMessage("This account is already linked with Google. Please sign in.");
         setSnackbarSeverity("error");
         setOpenSnackbar(true);
@@ -32,15 +57,14 @@ const GoogleAuth = ({ openSnackbar, setOpenSnackbar, setSnackbarMessage, setSnac
         await setDoc(userRef, {
           userData: {
             email: user.email,
-            name: user.displayName,
+            displayName: user.displayName,
             username: user.displayName.replace(/\s+/g, "").toLowerCase(),
             createdAt: serverTimestamp(),
             photoURL: user.photoURL,
+            emailVerified: user.emailVerified
           },
           signUpMethods: ["Google"],
         });
-
-        console.log("New Google user added to Firestore:", user.uid);
 
         setSnackbarMessage("Account created successfully! You can now sign in.");
         setSnackbarSeverity("success");

@@ -37,46 +37,46 @@ import {
   faCircleCheck 
 } from '@fortawesome/free-solid-svg-icons';
 
-const Users = () => {
-  const [users, setUsers] = useState([]);
+const Drivers = () => {
+  const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedDriver, setSelectedDriver] = useState(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "info",
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
+    fetchDrivers();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchDrivers = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "users"));
-      const usersData = querySnapshot.docs.map((doc) => ({
+      const querySnapshot = await getDocs(collection(db, "drivers"));
+      const driversData = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      setUsers(usersData);
+      setDrivers(driversData);
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching users:", error);
+      console.error("Error fetching drivers:", error);
       setSnackbar({
         open: true,
-        message: "Failed to load users",
+        message: "Failed to load drivers",
         severity: "error",
       });
       setLoading(false);
     }
   };
 
-  const handleMenuOpen = (event, user) => {
+  const handleMenuOpen = (event, driver) => {
     setAnchorEl(event.currentTarget);
-    setSelectedUser(user);
+    setSelectedDriver(driver);
   };
 
   const handleMenuClose = () => {
@@ -88,25 +88,25 @@ const Users = () => {
     handleMenuClose();
   };
 
-  const handleSuspendClick = () => {
-    setSuspendDialogOpen(true);
+  const handleStatusClick = () => {
+    setStatusDialogOpen(true);
     handleMenuClose();
   };
 
-  const handleDeleteUser = async () => {
+  const handleDeleteDriver = async () => {
     try {
-      await deleteDoc(doc(db, "users", selectedUser.id));
-      setUsers(users.filter((user) => user.id !== selectedUser.id));
+      await deleteDoc(doc(db, "drivers", selectedDriver.id));
+      setDrivers(drivers.filter((driver) => driver.id !== selectedDriver.id));
       setSnackbar({
         open: true,
-        message: "User deleted successfully",
+        message: "Driver deleted successfully",
         severity: "success",
       });
     } catch (error) {
-      console.error("Error deleting user:", error);
+      console.error("Error deleting driver:", error);
       setSnackbar({
         open: true,
-        message: "Failed to delete user",
+        message: "Failed to delete driver",
         severity: "error",
       });
     }
@@ -115,34 +115,33 @@ const Users = () => {
 
   const handleToggleStatus = async () => {
     try {
-      const newStatus =
-        selectedUser.status === "active" ? "suspended" : "active";
-      await updateDoc(doc(db, "users", selectedUser.id), {
+      const newStatus = selectedDriver.status === "active" ? "suspended" : "active";
+      await updateDoc(doc(db, "drivers", selectedDriver.id), {
         status: newStatus,
       });
 
-      setUsers(
-        users.map((user) =>
-          user.id === selectedUser.id ? { ...user, status: newStatus } : user
+      setDrivers(
+        drivers.map((driver) =>
+          driver.id === selectedDriver.id ? { ...driver, status: newStatus } : driver
         )
       );
 
       setSnackbar({
         open: true,
-        message: `User ${
+        message: `Driver ${
           newStatus === "active" ? "activated" : "suspended"
         } successfully`,
         severity: "success",
       });
     } catch (error) {
-      console.error("Error updating user status:", error);
+      console.error("Error updating driver status:", error);
       setSnackbar({
         open: true,
-        message: "Failed to update user status",
+        message: "Failed to update driver status",
         severity: "error",
       });
     }
-    setSuspendDialogOpen(false);
+    setStatusDialogOpen(false);
   };
 
   const formatDate = (timestamp) => {
@@ -163,7 +162,7 @@ const Users = () => {
     >
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
-          User Management
+          Driver Management
         </Typography>
 
         {loading ? (
@@ -172,50 +171,57 @@ const Users = () => {
           </Box>
         ) : (
           <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-            <Table sx={{ minWidth: 650 }} aria-label="users table">
+            <Table sx={{ minWidth: 650 }} aria-label="drivers table">
               <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
                 <TableRow>
-                  <TableCell>User</TableCell>
+                  <TableCell>Driver</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Name</TableCell>
                   <TableCell>Phone</TableCell>
-                  <TableCell>Joined</TableCell>
+                  <TableCell>User ID</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {users.map((user) => (
+                {drivers.map((driver) => (
                   <TableRow
-                    key={user.id}
+                    key={driver.id}
                     sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                   >
                     <TableCell>
                       <Box sx={{ display: "flex", alignItems: "center" }}>
                         <Avatar
-                          src={user.photoURL || ""}
                           sx={{ mr: 2, bgcolor: "primary.main" }}
                         >
-                          {user.name?.charAt(0) || "U"}
+                          {driver.name?.charAt(0) || "D"}
                         </Avatar>
-                        {user.email}
+                        {driver.name}
                       </Box>
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.name || "N/A"}</TableCell>
-                    <TableCell>{user.phone || "N/A"}</TableCell>
-                    <TableCell>{formatDate(user.createdAt)}</TableCell>
+                    <TableCell>{driver.email}</TableCell>
+                    <TableCell>{driver.name || "N/A"}</TableCell>
+                    <TableCell>{driver.phone || "N/A"}</TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace' }}>
+                      {driver.userId || "N/A"}
+                    </TableCell>
                     <TableCell>
                       <Chip
-                        label={user.status || "active"}
-                        color={user.status === "active" ? "success" : "error"}
+                        label={driver.status || "pending"}
+                        color={
+                          driver.status === "active" 
+                            ? "success" 
+                            : driver.status === "pending"
+                            ? "warning"
+                            : "error"
+                        }
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
                       <IconButton
                         aria-label="actions"
-                        onClick={(e) => handleMenuOpen(e, user)}
+                        onClick={(e) => handleMenuOpen(e, driver)}
                       >
                         <FontAwesomeIcon icon={faEllipsisVertical} />
                       </IconButton>
@@ -232,20 +238,21 @@ const Users = () => {
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-          <MenuItem onClick={handleSuspendClick}>
+          <MenuItem onClick={handleStatusClick}>
             <ListItemIcon>
               <FontAwesomeIcon 
-                icon={selectedUser?.status === "active" ? faBan : faCircleCheck} 
+                icon={selectedDriver?.status === "active" ? faBan : faCircleCheck} 
                 fontSize="small" 
+                color={selectedDriver?.status === "active" ? "warning" : "success"}
               />
             </ListItemIcon>
             <ListItemText>
-              {selectedUser?.status === "active" ? "Suspend" : "Activate"}
+              {selectedDriver?.status === "active" ? "Suspend" : "Activate"}
             </ListItemText>
           </MenuItem>
           <MenuItem onClick={handleDeleteClick}>
             <ListItemIcon>
-              <FontAwesomeIcon icon={faTrash} fontSize="small" />
+              <FontAwesomeIcon icon={faTrash} fontSize="small" color="error" />
             </ListItemIcon>
             <ListItemText>Delete</ListItemText>
           </MenuItem>
@@ -259,17 +266,17 @@ const Users = () => {
           aria-describedby="alert-dialog-description"
         >
           <DialogTitle id="alert-dialog-title">
-            {"Confirm User Deletion"}
+            {"Confirm Driver Deletion"}
           </DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
               Are you sure you want to permanently delete{" "}
-              {selectedUser?.name || "this user"}? This action cannot be undone.
+              {selectedDriver?.name || "this driver"}? This action cannot be undone.
             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleDeleteUser} color="error" autoFocus>
+            <Button onClick={handleDeleteDriver} color="error" autoFocus>
               Delete
             </Button>
           </DialogActions>
@@ -277,36 +284,36 @@ const Users = () => {
 
         {}
         <Dialog
-          open={suspendDialogOpen}
-          onClose={() => setSuspendDialogOpen(false)}
+          open={statusDialogOpen}
+          onClose={() => setStatusDialogOpen(false)}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
           <DialogTitle id="alert-dialog-title">
-            {selectedUser?.status === "active"
-              ? "Confirm User Suspension"
-              : "Confirm User Activation"}
+            {selectedDriver?.status === "active"
+              ? "Confirm Driver Suspension"
+              : "Confirm Driver Activation"}
           </DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
-              {selectedUser?.status === "active"
+              {selectedDriver?.status === "active"
                 ? `Are you sure you want to suspend ${
-                    selectedUser?.name || "this user"
+                    selectedDriver?.name || "this driver"
                   }? They will lose access to their account.`
                 : `Are you sure you want to activate ${
-                    selectedUser?.name || "this user"
+                    selectedDriver?.name || "this driver"
                   }? They will regain access to their account.`}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setSuspendDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleToggleStatus} color="primary" autoFocus>
-              {selectedUser?.status === "active" ? "Suspend" : "Activate"}
+              {selectedDriver?.status === "active" ? "Suspend" : "Activate"}
             </Button>
           </DialogActions>
         </Dialog>
 
-        {!loading && users.length === 0 && (
+        {!loading && drivers.length === 0 && (
           <Box
             sx={{
               display: "flex",
@@ -319,7 +326,7 @@ const Users = () => {
             }}
           >
             <Typography variant="body1" color="text.secondary">
-              No users found
+              No drivers found
             </Typography>
           </Box>
         )}
@@ -343,4 +350,4 @@ const Users = () => {
   );
 };
 
-export default Users;
+export default Drivers;

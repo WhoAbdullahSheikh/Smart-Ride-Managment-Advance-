@@ -6,8 +6,10 @@ import SignIn from "./libs/screens/SignIn";
 import DashboardLayout from "./libs/components/DashboardLayout";
 import Dashboard from "./libs/screens/Dashboard";
 import Profile from "./libs/screens/Profile";
-import ManageRoutes from "./libs/screens/ManageRoutes";
+import CreateRoutes from "./libs/screens/CreateRoutes";
 import Users from "./libs/screens/Users";
+import Drivers from "./libs/screens/Drivers";
+import ManageRoutes from "./libs/screens/ManageRoutes"
 
 import { AnimatePresence } from "framer-motion";
 const App = () => {
@@ -21,9 +23,11 @@ const App = () => {
           <Route path="/signin" element={<SignIn />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
-            <Route path="routes" element={<ManageRoutes />} />
+            <Route path="createroutes" element={<CreateRoutes />} />
             <Route path="profile" element={<Profile />} />
             <Route path="users" element={<Users />} />
+            <Route path="drivers" element={<Drivers />} />
+            <Route path="manageroutes" element={<ManageRoutes />} />
           </Route>
         </Routes>
       </AnimatePresence>

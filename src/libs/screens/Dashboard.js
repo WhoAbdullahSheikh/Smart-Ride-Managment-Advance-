@@ -47,7 +47,6 @@ const mapContainerStyle = {
   borderRadius: "30px",
 };
 
-// Center on Pakistan by default
 const PAKISTAN_CENTER = {
   lat: 30.3753,
   lng: 69.3451,
@@ -126,7 +125,7 @@ const Dashboard = () => {
   };
 
   const handleAddRoute = () => {
-    navigate("/dashboard/routes");
+    navigate("/dashboard/createroutes");
   };
 
   const handleMapLoad = () => {
@@ -403,24 +402,24 @@ const Dashboard = () => {
                     streetViewControl: true,
                     mapTypeControl: true,
                     fullscreenControl: true,
-                    mapTypeId: "hybrid", // This enables satellite view with labels
+                    mapTypeId: "hybrid",
                     styles: [
                       {
                         featureType: "all",
                         elementType: "labels",
-                        stylers: [{ visibility: "on" }], // Ensure labels are visible
+                        stylers: [{ visibility: "on" }],
                       },
                     ],
                   }}
                 >
-                  {/* Traffic layer */}
+                  {}
                   {mapLoaded && (
                     <div>
                       <TrafficLayer autoUpdate />
                     </div>
                   )}
 
-                  {/* Rest of your markers */}
+                  {}
                   {routes.map((route) => {
                     if (!route.originCoordinates) return null;
 
@@ -544,14 +543,7 @@ const Dashboard = () => {
             </ListItemIcon>
             <ListItemText>View Origin</ListItemText>
           </MenuItem>
-          <MenuItem
-            onClick={() => navigate(`/dashboard/routes/${selectedRoute?.id}`)}
-          >
-            <ListItemIcon>
-              <FaEdit />
-            </ListItemIcon>
-            <ListItemText>Edit Route</ListItemText>
-          </MenuItem>
+          
           <MenuItem onClick={handleDeleteRoute}>
             <ListItemIcon>
               <FaTrash />

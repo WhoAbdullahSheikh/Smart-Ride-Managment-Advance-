@@ -1,10 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Typography,
-  Button,
-  TextField,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
   CircularProgress,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
   Snackbar,
   Alert,
   Dialog,
@@ -12,28 +22,65 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  Button,
   Chip,
+  Tooltip,
+  TextField,
+  Select,
+  FormControl,
+  InputLabel,
+  TableSortLabel,
+  InputAdornment,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
+import { db } from "../firebase";
 import { motion } from "framer-motion";
-import { FaPlus, FaSave } from "react-icons/fa";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faEllipsisVertical,
+  faTrash,
+  faEdit,
+  faEye,
+  faRoute,
+  faSave,
+  faSearch,
+  faSort,
+  faSortUp,
+  faSortDown,
+} from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 import { LoadScript, GoogleMap, Marker } from "@react-google-maps/api";
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
-import { db } from "../firebase";
 import { TrafficLayer } from "@react-google-maps/api";
 
 const mapContainerStyle = {
   width: "100%",
-  height: "800px",
-  borderRadius: "30px",
+  height: "400px",
+  borderRadius: "8px",
 };
 
 const libraries = ["places"];
 
 const ManageRoutes = () => {
-  const navigate = useNavigate();
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [routeForm, setRouteForm] = useState({
+  const [routes, setRoutes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "info",
+  });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
     name: "",
     origin: "",
     destination: "",
@@ -42,61 +89,153 @@ const ManageRoutes = () => {
   });
   const [originPosition, setOriginPosition] = useState(null);
   const [destinationPosition, setDestinationPosition] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [locationLoading, setLocationLoading] = useState(true);
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "info",
-  });
+  const [mapLoaded, setMapLoaded] = useState(false);
   const [activeMarker, setActiveMarker] = useState("origin");
-  const [showInstructions, setShowInstructions] = useState(false);
-  const [editingRoute, setEditingRoute] = useState(false);
-  const [showMapLoadMessage, setShowMapLoadMessage] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState({
+    key: "createdAt",
+    direction: "desc",
+  });
+  const [sortOption, setSortOption] = useState("newest");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    setShowMapLoadMessage(true);
+    fetchRoutes();
+  }, []);
 
-    if (!navigator.geolocation) {
+  const fetchRoutes = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "routes"));
+      const routesData = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setRoutes(routesData);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching routes:", error);
       setSnackbar({
         open: true,
-        message: "Geolocation is not supported by your browser",
+        message: "Failed to load routes",
         severity: "error",
       });
-      setLocationLoading(false);
-      return;
+      setLoading(false);
     }
+  };
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const newPosition = { lat: latitude, lng: longitude };
-        setOriginPosition(newPosition);
-        await updateAddressFromCoordinates(newPosition, "origin");
-        setLocationLoading(false);
-      },
-      (err) => {
-        setSnackbar({
-          open: true,
-          message: "Unable to retrieve your location",
-          severity: "error",
-        });
-        setLocationLoading(false);
-        console.error("Geolocation error:", err);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
-
-    const instructionsShown = localStorage.getItem("routeInstructionsShown");
-    if (!instructionsShown) {
-      setShowInstructions(true);
-      localStorage.setItem("routeInstructionsShown", "true");
+  const handleSortOptionChange = (event, newOption) => {
+    if (newOption !== null) {
+      setSortOption(newOption);
+      setSortConfig({
+        key: "createdAt",
+        direction: newOption === "newest" ? "desc" : "asc",
+      });
     }
-  }, []);
+  };
+
+  const handleSort = (key) => {
+    let direction = "desc";
+    if (sortConfig.key === key && sortConfig.direction === "desc") {
+      direction = "asc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedRoutes = useMemo(() => {
+    const sortableRoutes = [...routes];
+    if (sortConfig.key) {
+      sortableRoutes.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === "asc" ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === "asc" ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableRoutes;
+  }, [routes, sortConfig]);
+
+  const filteredRoutes = useMemo(() => {
+    return sortedRoutes.filter((route) => {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        route.name.toLowerCase().includes(searchLower) ||
+        route.origin.toLowerCase().includes(searchLower) ||
+        route.destination.toLowerCase().includes(searchLower) ||
+        route.status.toLowerCase().includes(searchLower) ||
+        (route.waypoints &&
+          route.waypoints.some((wp) =>
+            wp.toLowerCase().includes(searchLower)
+          ))
+      );
+    });
+  }, [sortedRoutes, searchTerm]);
+
+  const handleMenuOpen = (event, route) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedRoute(route);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleEditClick = () => {
+    if (selectedRoute) {
+      setEditForm({
+        name: selectedRoute.name,
+        origin: selectedRoute.origin,
+        destination: selectedRoute.destination,
+        waypoints: selectedRoute.waypoints || [],
+        status: selectedRoute.status || "active",
+      });
+      setOriginPosition(
+        selectedRoute.originCoordinates
+          ? {
+              lat: selectedRoute.originCoordinates.latitude,
+              lng: selectedRoute.originCoordinates.longitude,
+            }
+          : null
+      );
+      setDestinationPosition(
+        selectedRoute.destinationCoordinates
+          ? {
+              lat: selectedRoute.destinationCoordinates.latitude,
+              lng: selectedRoute.destinationCoordinates.longitude,
+            }
+          : null
+      );
+      setEditDialogOpen(true);
+    }
+    handleMenuClose();
+  };
+
+  const handleDeleteRoute = async () => {
+    try {
+      await deleteDoc(doc(db, "routes", selectedRoute.id));
+      setRoutes(routes.filter((route) => route.id !== selectedRoute.id));
+      setSnackbar({
+        open: true,
+        message: "Route deleted successfully",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error deleting route:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to delete route",
+        severity: "error",
+      });
+    }
+    setDeleteDialogOpen(false);
+  };
 
   const handleMapClick = (e) => {
     const newPosition = {
@@ -127,7 +266,7 @@ const ManageRoutes = () => {
       const address =
         data.locality || data.principalSubdivision || data.countryName;
 
-      setRouteForm((prev) => ({
+      setEditForm((prev) => ({
         ...prev,
         [field]: address,
       }));
@@ -157,7 +296,7 @@ const ManageRoutes = () => {
   };
 
   const handleAddressChange = async (field, value) => {
-    setRouteForm((prev) => ({ ...prev, [field]: value }));
+    setEditForm((prev) => ({ ...prev, [field]: value }));
     setActiveMarker(field);
 
     if (
@@ -185,17 +324,28 @@ const ManageRoutes = () => {
     setActiveMarker(field);
   };
 
-  const handleInputChange = (e) => {
+  const handleEditFormChange = (e) => {
     const { name, value } = e.target;
-    setRouteForm((prev) => ({
+    setEditForm((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleWaypointsChange = (e) => {
+    const waypoints = e.target.value
+      .split("\n")
+      .map((wp) => wp.trim())
+      .filter((wp) => wp !== "");
+    setEditForm((prev) => ({
+      ...prev,
+      waypoints,
+    }));
+  };
+
+  const handleUpdateRoute = async () => {
     try {
-      if (!routeForm.name || !routeForm.origin || !routeForm.destination) {
+      if (!editForm.name || !editForm.origin || !editForm.destination) {
         setSnackbar({
           open: true,
           message: "Please fill all required fields",
@@ -204,14 +354,12 @@ const ManageRoutes = () => {
         return;
       }
 
-      setLoading(true);
-
       const routeData = {
-        name: routeForm.name,
-        origin: routeForm.origin,
-        destination: routeForm.destination,
-        waypoints: routeForm.waypoints,
-        status: routeForm.status,
+        name: editForm.name,
+        origin: editForm.origin,
+        destination: editForm.destination,
+        waypoints: editForm.waypoints,
+        status: editForm.status,
         originCoordinates: {
           latitude: originPosition?.lat || null,
           longitude: originPosition?.lng || null,
@@ -223,38 +371,38 @@ const ManageRoutes = () => {
         updatedAt: new Date(),
       };
 
-      if (editingRoute) {
-        await updateDoc(doc(db, "routes", routeForm.id), routeData);
-        setSnackbar({
-          open: true,
-          message: "Route updated successfully",
-          severity: "success",
-        });
-      } else {
-        routeData.createdAt = new Date();
-        await addDoc(collection(db, "routes"), routeData);
-        setSnackbar({
-          open: true,
-          message: "Route added successfully",
-          severity: "success",
-        });
-      }
+      await updateDoc(doc(db, "routes", selectedRoute.id), routeData);
 
-      navigate("/dashboard/routes");
-    } catch (error) {
-      console.error("Error saving route: ", error);
+      setRoutes(
+        routes.map((route) =>
+          route.id === selectedRoute.id ? { ...route, ...routeData } : route
+        )
+      );
+
       setSnackbar({
         open: true,
-        message: "Failed to save route",
+        message: "Route updated successfully",
+        severity: "success",
+      });
+      setEditDialogOpen(false);
+    } catch (error) {
+      console.error("Error updating route: ", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to update route",
         severity: "error",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
+  const formatDate = (timestamp) => {
+    if (!timestamp) return "N/A";
+    const date = timestamp.toDate();
+    return date.toLocaleString();
+  };
+
   const handleCloseSnackbar = () => {
-    setSnackbar((prev) => ({ ...prev, open: false }));
+    setSnackbar({ ...snackbar, open: false });
   };
 
   return (
@@ -263,358 +411,405 @@ const ManageRoutes = () => {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <Box>
-        {/* Initial map load message */}
-        <Snackbar
-          open={showMapLoadMessage}
-          autoHideDuration={6000}
-          onClose={() => setShowMapLoadMessage(false)}
-          anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      <Box sx={{ p: 3 }}>
+        <Box
           sx={{
-            "& .MuiSnackbar-root": {
-              top: "24px",
-              right: "24px",
-            },
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 3,
           }}
         >
-          <Alert 
-            onClose={() => setShowMapLoadMessage(false)} 
-            severity="info"
-            sx={{ width: '100%' }}
-            action={
-              <Button 
-                color="inherit" 
-                size="small"
-                onClick={() => window.location.reload()}
-              >
-                Refresh
-              </Button>
-            }
+          <Typography variant="h4">Manage Routes</Typography>
+          <Button
+            variant="contained"
+            startIcon={<FontAwesomeIcon icon={faRoute} />}
+            onClick={() => navigate("/dashboard/createroutes")}
           >
-            If the map doesn't load properly, please refresh your page.
-          </Alert>
-        </Snackbar>
+            Create New Route
+          </Button>
+        </Box>
 
-        {/* Error messages */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: "top", horizontal: "right" }}
-          sx={{
-            "& .MuiSnackbar-root": {
-              top: "80px",
-              right: "24px",
-            },
-          }}
+        {}
+        <Box sx={{ display: "flex", gap: 2, mb: 3,  }}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Search routes..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <FontAwesomeIcon icon={faSearch} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1}}
+          />
+          
+          <ToggleButtonGroup
+            value={sortOption}
+            exclusive
+            onChange={handleSortOptionChange}
+            aria-label="sort options"
+          >
+            <ToggleButton value="newest" aria-label="newest first">
+              <FontAwesomeIcon icon={faSortDown} style={{ marginRight: 8 }} />
+              Newest
+            </ToggleButton>
+            <ToggleButton value="oldest" aria-label="oldest first">
+              <FontAwesomeIcon icon={faSortUp} style={{ marginRight: 8 }} />
+              Oldest
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer component={Paper} sx={{ borderRadius: "20px" }}>
+            <Table sx={{ minWidth: 650 }} aria-label="routes table">
+              <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
+                <TableRow>
+                  <TableCell>#</TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortConfig.key === "name"}
+                      direction={sortConfig.key === "name" ? sortConfig.direction : "desc"}
+                      onClick={() => handleSort("name")}
+                      IconComponent={() => <FontAwesomeIcon icon={faSort} />}
+                    >
+                      Route Name
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>Origin</TableCell>
+                  <TableCell>Destination</TableCell>
+                  <TableCell>Waypoints</TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortConfig.key === "status"}
+                      direction={sortConfig.key === "status" ? sortConfig.direction : "desc"}
+                      onClick={() => handleSort("status")}
+                      IconComponent={() => <FontAwesomeIcon icon={faSort} />}
+                    >
+                      Status
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortConfig.key === "createdAt"}
+                      direction={sortConfig.key === "createdAt" ? sortConfig.direction : "desc"}
+                      onClick={() => handleSort("createdAt")}
+                      IconComponent={() => <FontAwesomeIcon icon={faSort} />}
+                    >
+                      Created
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredRoutes.map((route, index) => (
+                  <TableRow
+                    key={route.id}
+                    sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
+                  >
+                    <TableCell>{index + 1}</TableCell>
+                    <TableCell>
+                      <Typography fontWeight="medium">{route.name}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip
+                        title={`Lat: ${
+                          route.originCoordinates?.latitude?.toFixed(6) || "N/A"
+                        }, Lng: ${
+                          route.originCoordinates?.longitude?.toFixed(6) ||
+                          "N/A"
+                        }`}
+                      >
+                        <span>{route.origin}</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip
+                        title={`Lat: ${
+                          route.destinationCoordinates?.latitude?.toFixed(6) ||
+                          "N/A"
+                        }, Lng: ${
+                          route.destinationCoordinates?.longitude?.toFixed(6) ||
+                          "N/A"
+                        }`}
+                      >
+                        <span>{route.destination}</span>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      {route.waypoints?.length > 0 ? (
+                        <Tooltip title={route.waypoints.join("\n")}>
+                          <Chip
+                            label={`${route.waypoints.length} waypoints`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          None
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={route.status || "active"}
+                        color={route.status === "active" ? "success" : "error"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>{formatDate(route.createdAt)}</TableCell>
+                    <TableCell>
+                      <IconButton
+                        aria-label="actions"
+                        onClick={(e) => handleMenuOpen(e, route)}
+                      >
+                        <FontAwesomeIcon icon={faEllipsisVertical} />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={handleMenuClose}
         >
-          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
+         
+          <MenuItem onClick={handleEditClick}>
+            <ListItemIcon>
+              <FontAwesomeIcon icon={faEdit} fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Edit</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={handleDeleteClick}>
+            <ListItemIcon>
+              <FontAwesomeIcon icon={faTrash} fontSize="small" color="error" />
+            </ListItemIcon>
+            <ListItemText>Delete</ListItemText>
+          </MenuItem>
+        </Menu>
 
-        <Typography variant="h4" sx={{ mb: 3 }}>
-          Add New Route
-        </Typography>
-
-        {/* Instructions Dialog */}
         <Dialog
-          open={showInstructions}
-          onClose={() => setShowInstructions(false)}
+          open={deleteDialogOpen}
+          onClose={() => setDeleteDialogOpen(false)}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
           <DialogTitle id="alert-dialog-title">
-            How to Set Your Route
+            {"Confirm Route Deletion"}
           </DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
-              <Box sx={{ mb: 2 }}>
-                <strong>Setting your route is easy:</strong>
-              </Box>
-              <Box sx={{ mb: 2 }}>
-                1. <strong>Click on the map</strong> to place markers
-              </Box>
-              <Box sx={{ mb: 2 }}>
-                2. <strong>Drag the markers</strong> to adjust their position
-              </Box>
-              <Box sx={{ mb: 2 }}>
-                3. <strong>Type addresses</strong> in the fields to search locations
-              </Box>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-                <Chip label="Origin" sx={{ backgroundColor: "#ffebee", mr: 1 }} />
-                <Box
-                  sx={{
-                    width: 20,
-                    height: 20,
-                    backgroundColor: "red",
-                    borderRadius: "50%",
-                    mr: 1,
-                  }}
-                />
-                <Typography>Red marker is for origin</Typography>
-              </Box>
-              <Box sx={{ display: "flex", alignItems: "center" }}>
-                <Chip label="Destination" sx={{ backgroundColor: "#e3f2fd", mr: 1 }} />
-                <Box
-                  sx={{
-                    width: 20,
-                    height: 20,
-                    backgroundColor: "blue",
-                    borderRadius: "50%",
-                    mr: 1,
-                  }}
-                />
-                <Typography>Blue marker is for destination</Typography>
-              </Box>
+              Are you sure you want to permanently delete the route{" "}
+              <strong>{selectedRoute?.name}</strong>? This action cannot be
+              undone.
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowInstructions(false)} autoFocus>
-              Got it!
+            <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleDeleteRoute} color="error" autoFocus>
+              Delete
             </Button>
           </DialogActions>
         </Dialog>
 
-        {/* Marker Legend */}
-        <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <Box
-              sx={{
-                width: 12,
-                height: 12,
-                backgroundColor: "red",
-                borderRadius: "50%",
-                mr: 1,
-              }}
-            />
-            <Typography variant="body2">Origin</Typography>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <Box
-              sx={{
-                width: 12,
-                height: 12,
-                backgroundColor: "blue",
-                borderRadius: "50%",
-                mr: 1,
-              }}
-            />
-            <Typography variant="body2">Destination</Typography>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <Typography variant="body2" color="text.secondary">
-              Tip: Click on the map or type addresses to set locations
+        <Dialog
+          open={editDialogOpen}
+          onClose={() => setEditDialogOpen(false)}
+          fullWidth
+          maxWidth="md"
+          scroll="paper"
+        >
+          <DialogTitle>Edit Route: {selectedRoute?.name}</DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ mb: 3 }}>
+              <TextField
+                autoFocus
+                margin="dense"
+                name="name"
+                label="Route Name"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={editForm.name}
+                onChange={handleEditFormChange}
+                sx={{ mb: 2 }}
+                required
+              />
+
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  name="status"
+                  value={editForm.status}
+                  onChange={handleEditFormChange}
+                  label="Status"
+                >
+                  <MenuItem value="active">Active</MenuItem>
+                  <MenuItem value="inactive">Inactive</MenuItem>
+                </Select>
+              </FormControl>
+
+              <TextField
+                margin="dense"
+                name="origin"
+                label="Origin Address"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={editForm.origin}
+                onChange={(e) => handleAddressChange("origin", e.target.value)}
+                onFocus={() => handleInputFocus("origin")}
+                sx={{ mb: 2 }}
+                required
+              />
+
+              <TextField
+                margin="dense"
+                name="destination"
+                label="Destination Address"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={editForm.destination}
+                onChange={(e) =>
+                  handleAddressChange("destination", e.target.value)
+                }
+                onFocus={() => handleInputFocus("destination")}
+                sx={{ mb: 2 }}
+                required
+              />
+
+              <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+                Waypoints (Add one per line)
+              </Typography>
+              <TextField
+                margin="dense"
+                name="waypoints"
+                label="Waypoints"
+                type="text"
+                fullWidth
+                variant="outlined"
+                multiline
+                rows={4}
+                placeholder="Address 1\nAddress 2\n..."
+                value={editForm.waypoints.join("\n")}
+                onChange={handleWaypointsChange}
+              />
+            </Box>
+
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Route Map
             </Typography>
-          </Box>
-        </Box>
+            <Box sx={{ height: "400px", mb: 2 }}>
+              <LoadScript
+                googleMapsApiKey="AIzaSyByATEojq4YfKfzIIrRFA_1sAkKNKsnNeQ"
+                libraries={libraries}
+                onLoad={() => setMapLoaded(true)}
+              >
+                <GoogleMap
+                  mapContainerStyle={mapContainerStyle}
+                  center={originPosition || { lat: 0, lng: 0 }}
+                  zoom={originPosition ? 12 : 2}
+                  onClick={handleMapClick}
+                  options={{
+                    streetViewControl: true,
+                    mapTypeControl: true,
+                    fullscreenControl: true,
+                    mapTypeId: "hybrid",
+                    styles: [
+                      {
+                        featureType: "all",
+                        elementType: "labels",
+                        stylers: [{ visibility: "on" }],
+                      },
+                    ],
+                  }}
+                >
+                  {mapLoaded && <TrafficLayer autoUpdate />}
+                  {originPosition && (
+                    <Marker
+                      position={originPosition}
+                      draggable={true}
+                      onDragEnd={(e) => handleMarkerDragEnd(e, "origin")}
+                      icon={{
+                        url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+                      }}
+                    />
+                  )}
+                  {destinationPosition && (
+                    <Marker
+                      position={destinationPosition}
+                      draggable={true}
+                      onDragEnd={(e) => handleMarkerDragEnd(e, "destination")}
+                      icon={{
+                        url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                      }}
+                    />
+                  )}
+                </GoogleMap>
+              </LoadScript>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleUpdateRoute}
+              variant="contained"
+              startIcon={<FontAwesomeIcon icon={faSave} />}
+            >
+              Save Changes
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-        <TextField
-          autoFocus
-          margin="dense"
-          name="name"
-          label="Route Name"
-          type="text"
-          fullWidth
-          variant="outlined"
-          value={routeForm.name}
-          onChange={handleInputChange}
-          sx={{ mb: 2 }}
-          required
-        />
-
-        <TextField
-          margin="dense"
-          name="origin"
-          label="Origin Address"
-          type="text"
-          fullWidth
-          variant="outlined"
-          value={routeForm.origin}
-          onChange={(e) => handleAddressChange("origin", e.target.value)}
-          onFocus={() => handleInputFocus("origin")}
-          sx={{ mb: 2 }}
-          required
-        />
-
-        <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-          <TextField
-            label="Origin Latitude"
-            value={originPosition ? originPosition.lat.toFixed(6) : ""}
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-          <TextField
-            label="Origin Longitude"
-            value={originPosition ? originPosition.lng.toFixed(6) : ""}
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-        </Box>
-
-        <TextField
-          margin="dense"
-          name="destination"
-          label="Destination Address"
-          type="text"
-          fullWidth
-          variant="outlined"
-          value={routeForm.destination}
-          onChange={(e) => handleAddressChange("destination", e.target.value)}
-          onFocus={() => handleInputFocus("destination")}
-          sx={{ mb: 2 }}
-          required
-        />
-
-        <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-          <TextField
-            label="Destination Latitude"
-            value={
-              destinationPosition ? destinationPosition.lat.toFixed(6) : ""
-            }
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-          <TextField
-            label="Destination Longitude"
-            value={
-              destinationPosition ? destinationPosition.lng.toFixed(6) : ""
-            }
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-        </Box>
-
-        {locationLoading ? (
+        {!loading && filteredRoutes.length === 0 && (
           <Box
             sx={{
-              height: "600px",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
-              backgroundColor: "#f5f5f5",
-              borderRadius: "30px",
+              height: "200px",
+              border: "1px dashed #ccc",
+              borderRadius: 2,
+              mt: 2,
             }}
           >
-            <CircularProgress />
-            <Typography sx={{ ml: 2 }}>Getting your location...</Typography>
+            <Typography variant="body1" color="text.secondary">
+              {searchTerm ? "No matching routes found" : "No routes found. Create your first route!"}
+            </Typography>
           </Box>
-        ) : (
-          <LoadScript
-            googleMapsApiKey="AIzaSyByATEojq4YfKfzIIrRFA_1sAkKNKsnNeQ"
-            libraries={libraries}
-            onLoad={() => {
-              setMapLoaded(true);
-              setShowMapLoadMessage(false);
-            }}
-            onError={() => {
-              setSnackbar({
-                open: true,
-                message: "Map failed to load. Please refresh your page.",
-                severity: "error",
-              });
-            }}
-          >
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={originPosition || { lat: 0, lng: 0 }}
-              zoom={originPosition ? 12 : 2}
-              onClick={handleMapClick}
-              options={{
-                streetViewControl: true,
-                mapTypeControl: true,
-                fullscreenControl: true,
-                mapTypeId: "hybrid",
-                styles: [
-                  {
-                    featureType: "all",
-                    elementType: "labels",
-                    stylers: [{ visibility: "on" }],
-                  },
-                ],
-              }}
-            >
-              {mapLoaded && <TrafficLayer autoUpdate />}
-              {originPosition && (
-                <Marker
-                  position={originPosition}
-                  draggable={true}
-                  onDragEnd={(e) => handleMarkerDragEnd(e, "origin")}
-                  icon={{
-                    url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
-                  }}
-                />
-              )}
-              {destinationPosition && (
-                <Marker
-                  position={destinationPosition}
-                  draggable={true}
-                  onDragEnd={(e) => handleMarkerDragEnd(e, "destination")}
-                  icon={{
-                    url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-                  }}
-                />
-              )}
-            </GoogleMap>
-          </LoadScript>
         )}
 
-        <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
-          Waypoints (Add one per line)
-        </Typography>
-        <TextField
-          margin="dense"
-          name="waypoints"
-          label="Waypoints"
-          type="text"
-          fullWidth
-          variant="outlined"
-          multiline
-          rows={4}
-          placeholder="Address 1\nAddress 2\n..."
-          value={routeForm.waypoints.join("\n")}
-          onChange={(e) => {
-            const waypoints = e.target.value
-              .split("\n")
-              .map((wp) => wp.trim())
-              .filter((wp) => wp !== "");
-            setRouteForm((prev) => ({
-              ...prev,
-              waypoints,
-            }));
-          }}
-        />
-
-        <Box
-          sx={{
-            mt: 3,
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: 10,
-          }}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         >
-          <Button
-            variant="outlined"
-            onClick={() => navigate("/dashboard/routes")}
-            sx={{ mr: 2 }}
+          <Alert
+            onClose={handleCloseSnackbar}
+            severity={snackbar.severity}
+            sx={{ width: "100%" }}
           >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={
-              loading ||
-              !routeForm.name ||
-              !routeForm.origin ||
-              !routeForm.destination ||
-              !originPosition
-            }
-            startIcon={loading ? <CircularProgress size={20} /> : <FaSave />}
-          >
-            Save Route
-          </Button>
-        </Box>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </motion.div>
   );

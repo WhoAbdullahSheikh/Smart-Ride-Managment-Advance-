@@ -10,7 +10,10 @@ import {
   Alert,
 } from "@mui/material";
 import { FaEnvelope, FaLock, FaUser } from "react-icons/fa";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { 
+  createUserWithEmailAndPassword,
+  sendEmailVerification 
+} from "firebase/auth";
 import { auth, db } from "../firebase";
 import {
   doc,
@@ -20,10 +23,12 @@ import {
   query,
   collection,
   where,
+  updateDoc
 } from "firebase/firestore";
 import { Link, useNavigate } from "react-router-dom";
 import backgroundImage from "../../assets/images/img.jpg";
-import { serverTimestamp } from "firebase/firestore";  // Import serverTimestamp
+import { serverTimestamp } from "firebase/firestore";
+
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,6 +38,7 @@ const SignUp = () => {
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("error");
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
@@ -64,61 +70,107 @@ const SignUp = () => {
   const handleEmailSignUp = async (e) => {
     e.preventDefault();
     setError("");
-
+    setLoading(true);
+  
     if (!isValidUsername(username)) {
       setSnackbarMessage(
         "Username combination should be alphanumeric with at least one number."
       );
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
+      setLoading(false);
       return;
     }
-
+  
     const usernameExists = await checkIfUsernameExists(username);
     if (usernameExists) {
       setSnackbarMessage("Username already exists. Please choose another.");
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
+      setLoading(false);
       return;
     }
-
-    createUserWithEmailAndPassword(auth, email, password)
-      .then((userCredential) => {
-        const user = userCredential.user;
-
-        const userRef = doc(db, "email", user.uid);
-
-        setDoc(userRef, {
-          userData: {
-            email: user.email,
-            displayName: name,
-            username: username,
-            createdAt: serverTimestamp(),
-          },
-          signUpMethods: arrayUnion("Email/Password"),
-        })
-          .then(() => {
-            console.log("Email user data saved to Firestore:", user.uid);
-          })
-          .catch((error) => {
-            console.error("Error saving data to Firestore:", error);
-          });
-
-        console.log("User signed up:", user);
-        setSnackbarMessage("Successfully signed up!");
-        setSnackbarSeverity("success");
-        setOpenSnackbar(true);
-
-        setTimeout(() => {
-          navigate("/signin");
-        }, 2000);
-      })
-      .catch((error) => {
-        console.error("Error signing up:", error);
-        setSnackbarMessage(error.message);
-        setSnackbarSeverity("error");
-        setOpenSnackbar(true);
+  
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
+  
+      await sendEmailVerification(user);
+  
+      const userRef = doc(db, "email", user.uid);
+  
+      await setDoc(userRef, {
+        userData: {
+          email: user.email,
+          displayName: name,
+          username: username,
+          createdAt: serverTimestamp(),
+          emailVerified: false
+        },
+        signUpMethods: arrayUnion("Email/Password"),
       });
+  
+      setSnackbarMessage(
+        "Successfully signed up! Please check your email to verify your account."
+      );
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+  
+      const checkInterval = setInterval(async () => {
+        const isVerified = await checkEmailVerification(user);
+        if (isVerified) {
+          clearInterval(checkInterval);
+          setSnackbarMessage("Email verified! You can now sign in.");
+          setSnackbarSeverity("success");
+          setOpenSnackbar(true);
+        }
+      }, 5000);
+  
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        navigate("/signin");
+      }, 30000);
+  
+    } catch (error) {
+      console.error("Error signing up:", error);
+      let errorMessage = error.message;
+      
+      if (error.code === "auth/email-already-in-use") {
+        errorMessage = "This email is already in use. Please sign in instead.";
+      } else if (error.code === "auth/weak-password") {
+        errorMessage = "Password should be at least 6 characters.";
+      } else if (error.code === "auth/invalid-email") {
+        errorMessage = "Please enter a valid email address.";
+      }
+  
+      setSnackbarMessage(errorMessage);
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkEmailVerification = async (user) => {
+    try {
+      await user.reload();
+      
+      if (user.emailVerified) {
+        const userRef = doc(db, "email", user.uid);
+        await updateDoc(userRef, {
+          "userData.emailVerified": true
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error checking email verification:", error);
+      return false;
+    }
   };
 
   const handleCloseSnackbar = () => {
@@ -343,11 +395,25 @@ const SignUp = () => {
               placeholder="Enter your password"
             />
 
+            <Typography
+              variant="body2"
+              sx={{
+                mt: 1,
+                fontSize: "0.75rem",
+                color: "#666",
+                textAlign: "center",
+                fontFamily: "Raleway, sans-serif",
+              }}
+            >
+              We'll send a verification email to activate your account.
+            </Typography>
+
             <Button
               type="submit"
               fullWidth
               variant="contained"
               color="#0f1728"
+              disabled={loading}
               sx={{
                 mt: 3,
                 py: 1,
@@ -362,11 +428,16 @@ const SignUp = () => {
                   boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
                   transform: "scale(1.01)",
                 },
+                "&:disabled": {
+                  backgroundColor: "#cccccc",
+                  color: "#666666",
+                },
               }}
             >
-              Sign Up
+              {loading ? "Processing..." : "Sign Up"}
             </Button>
           </form>
+
           <Box sx={{ mt: 3, textAlign: "center", width: "100%" }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
               Or

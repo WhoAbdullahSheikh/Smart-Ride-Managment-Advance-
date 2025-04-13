@@ -8,13 +8,14 @@ const DashboardLayout = () => {
   const [activeButton, setActiveButton] = useState("Home");
   const location = useLocation();
 
-  // Sync active button with current route
   useEffect(() => {
     const pathToButtonMap = {
       "/dashboard": "Home",
       "/dashboard/profile": "Profile",
-      "/dashboard/routes": "Routes",
+      "/dashboard/createroutes": "Routes",
       "/dashboard/users": "Users",
+      "/dashboard/drivers": "Drivers",
+      "/dashboard/manageroutes": "Manage Routes",
     };
     
     const currentButton = Object.entries(pathToButtonMap).find(

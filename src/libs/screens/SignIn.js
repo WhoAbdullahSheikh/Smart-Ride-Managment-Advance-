@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import GoogleAuth from "../auth/GoogleAuth";
 import {
   TextField,
   Button,
@@ -9,15 +8,23 @@ import {
   Box,
   Snackbar,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import { UAParser } from 'ua-parser-js';
 import { FaEnvelope, FaLock } from "react-icons/fa";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { 
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  GoogleAuthProvider, 
+  signInWithPopup 
+} from "firebase/auth";
 import { auth } from "../firebase";
 import { arrayUnion, updateDoc } from "firebase/firestore";
 import backgroundImage from "../../assets/images/img.jpg";
 import { doc, getDoc } from "firebase/firestore";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { db } from "../firebase";
 import GoogleLogo from "../../assets/svg/google.svg";
 
@@ -28,6 +35,9 @@ const SignIn = () => {
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("error");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
   const navigate = useNavigate();
 
   const getDeviceInfo = () => {
@@ -42,7 +52,6 @@ const SignIn = () => {
       browser: 'Unknown'
     };
   
-    // Device type
     if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent)) {
       deviceInfo.type = 'Mobile';
       if (/Android/.test(userAgent)) deviceInfo.type = 'Android';
@@ -54,7 +63,6 @@ const SignIn = () => {
       if (/Linux/.test(userAgent)) deviceInfo.type = 'Linux PC';
     }
   
-    // Get detailed device info
     if (result.device.model) {
       deviceInfo.model = result.device.model;
     }
@@ -69,10 +77,11 @@ const SignIn = () => {
   
     return deviceInfo;
   };
+
   const handleEmailSignIn = async (e) => {
     e.preventDefault();
     setError("");
-
+  
     try {
       const userCredential = await signInWithEmailAndPassword(
         auth,
@@ -80,16 +89,26 @@ const SignIn = () => {
         password
       );
       const user = userCredential.user;
-
+  
+      if (!user.emailVerified) {
+        await auth.signOut();
+        throw new Error("Please verify your email before signing in.");
+      }
+  
       const emailUserRef = doc(db, "email", user.uid);
       const emailUserDoc = await getDoc(emailUserRef);
-
+  
       if (!emailUserDoc.exists()) {
         await auth.signOut();
         throw new Error("Account not found in database");
       }
-
-      // Record login activity with device info
+  
+      if (!emailUserDoc.data().userData?.emailVerified) {
+        await updateDoc(emailUserRef, {
+          "userData.emailVerified": true
+        });
+      }
+  
       const loginActivity = {
         timestamp: new Date().toISOString(),
         device: {
@@ -106,9 +125,9 @@ const SignIn = () => {
       await updateDoc(emailUserRef, {
         loginActivities: arrayUnion(loginActivity),
       });
-
+  
       const userData = emailUserDoc.data().userData || emailUserDoc.data();
-
+  
       sessionStorage.setItem(
         "user",
         JSON.stringify({
@@ -119,19 +138,20 @@ const SignIn = () => {
           createdAt: userData.createdAt || {
             seconds: Math.floor(Date.now() / 1000),
           },
+          emailVerified: true
         })
       );
-
+  
       setSnackbarMessage("Successfully logged in!");
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
-
+  
       setTimeout(() => {
         navigate("/dashboard");
       }, 2000);
     } catch (error) {
       console.error("Error signing in:", error);
-
+  
       let errorMessage = "Error during sign-in. Please try again.";
       if (error.code === "auth/user-not-found") {
         errorMessage = "This account does not exist.";
@@ -139,8 +159,10 @@ const SignIn = () => {
         errorMessage = "Account does not exist.";
       } else if (error.code === "auth/wrong-password") {
         errorMessage = "Incorrect password.";
+      } else if (error.message === "Please verify your email before signing in.") {
+        errorMessage = error.message;
       }
-
+  
       setSnackbarMessage(errorMessage);
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
@@ -158,7 +180,6 @@ const SignIn = () => {
       const userSnapshot = await getDoc(userRef);
 
       if (userSnapshot.exists()) {
-        // Record login activity with device info
         const loginActivity = {
           timestamp: new Date().toISOString(),
           device: getDeviceInfo(),
@@ -208,6 +229,34 @@ const SignIn = () => {
       setOpenSnackbar(true);
     }
   };
+
+  const handleForgotPassword = () => {
+    setResetDialogOpen(true);
+    setResetSuccess(false);
+    setResetEmail(email);
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetSuccess(true);
+      setSnackbarMessage("Password reset email sent. Please check your inbox.");
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+    } catch (error) {
+      console.error("Error sending reset email:", error);
+      let errorMessage = "Error sending password reset email.";
+      if (error.code === "auth/user-not-found") {
+        errorMessage = "No account found with this email address.";
+      } else if (error.code === "auth/invalid-email") {
+        errorMessage = "Please enter a valid email address.";
+      }
+      setSnackbarMessage(errorMessage);
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    }
+  };
+
   const handleCloseSnackbar = () => {
     setOpenSnackbar(false);
   };
@@ -391,6 +440,24 @@ const SignIn = () => {
             </Button>
           </form>
 
+          <Box sx={{ width: "100%", textAlign: "right", mt: 1 }}>
+            <Button
+              onClick={handleForgotPassword}
+              sx={{
+                textTransform: "none",
+                color: "#0f1728",
+                fontFamily: "Raleway, sans-serif",
+                fontSize: "0.875rem",
+                "&:hover": {
+                  textDecoration: "underline",
+                  backgroundColor: "transparent",
+                },
+              }}
+            >
+              Forgot Password?
+            </Button>
+          </Box>
+
           <Box sx={{ mt: 3, textAlign: "center", width: "100%" }}>
             <Typography variant="body2" sx={{ mb: 1 }}>
               Or
@@ -445,6 +512,74 @@ const SignIn = () => {
               </Link>
             </Typography>
           </Box>
+
+          {/* Forgot Password Dialog */}
+          <Dialog
+            open={resetDialogOpen}
+            onClose={() => setResetDialogOpen(false)}
+            sx={{
+              "& .MuiDialog-paper": {
+                padding: "20px",
+                borderRadius: "15px",
+              },
+            }}
+          >
+            <DialogTitle sx={{ fontFamily: "Raleway, sans-serif" }}>
+              Reset Password
+            </DialogTitle>
+            <DialogContent>
+              {resetSuccess ? (
+                <Typography sx={{ fontFamily: "Raleway, sans-serif" }}>
+                  Password reset email sent to {resetEmail}. Please check your inbox.
+                </Typography>
+              ) : (
+                <>
+                  <Typography sx={{ mb: 2, fontFamily: "Raleway, sans-serif" }}>
+                    Enter your email address and we'll send you a link to reset your password.
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    label="Email Address"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    sx={{
+                      "& .MuiInputBase-input": {
+                        fontFamily: "Raleway, sans-serif",
+                      },
+                    }}
+                  />
+                </>
+              )}
+            </DialogContent>
+            <DialogActions>
+              {!resetSuccess && (
+                <>
+                  <Button
+                    onClick={() => setResetDialogOpen(false)}
+                    sx={{ fontFamily: "Raleway, sans-serif" }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleResetPassword}
+                    color="primary"
+                    sx={{ fontFamily: "Raleway, sans-serif" }}
+                  >
+                    Send Reset Link
+                  </Button>
+                </>
+              )}
+              {resetSuccess && (
+                <Button
+                  onClick={() => setResetDialogOpen(false)}
+                  color="primary"
+                  sx={{ fontFamily: "Raleway, sans-serif" }}
+                >
+                  Close
+                </Button>
+              )}
+            </DialogActions>
+          </Dialog>
         </Box>
       </Container>
     </Box>

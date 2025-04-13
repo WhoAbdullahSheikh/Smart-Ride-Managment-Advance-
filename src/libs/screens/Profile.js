@@ -28,39 +28,42 @@ import {
   FaEnvelope,
   FaUser,
   FaCalendarAlt,
-  FaSignOutAlt,
   FaSave,
   FaEye,
   FaEyeSlash,
   FaHistory,
+  FaTrash,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
 } from "firebase/auth";
 
-const ActivityDialog = ({ open, onClose, loginActivities }) => {
+const ActivityDialog = ({
+  open,
+  onClose,
+  loginActivities,
+  onDeleteActivity,
+}) => {
   const [sortNewestFirst, setSortNewestFirst] = useState(true);
-
   const toggleSortOrder = () => {
     setSortNewestFirst(!sortNewestFirst);
   };
 
   const formatDateWithTextMonth = (dateString) => {
     const date = new Date(dateString);
-    const options = { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+    const options = {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     };
-    return date.toLocaleDateString('en-US', options);
+    return date.toLocaleDateString("en-US", options);
   };
 
   const sortedActivities = [...loginActivities].sort((a, b) => {
@@ -68,6 +71,11 @@ const ActivityDialog = ({ open, onClose, loginActivities }) => {
       ? new Date(b.timestamp) - new Date(a.timestamp)
       : new Date(a.timestamp) - new Date(b.timestamp);
   });
+
+  const handleDelete = (index) => {
+    const activityToDelete = sortedActivities[index];
+    onDeleteActivity(activityToDelete.id || activityToDelete.timestamp);
+  };
 
   return (
     <Dialog
@@ -118,7 +126,18 @@ const ActivityDialog = ({ open, onClose, loginActivities }) => {
             <List sx={{ maxHeight: 400, overflow: "auto" }}>
               {sortedActivities.map((activity, index) => (
                 <React.Fragment key={index}>
-                  <ListItem>
+                  <ListItem
+                    secondaryAction={
+                      <IconButton
+                        edge="end"
+                        aria-label="delete"
+                        onClick={() => handleDelete(index)}
+                        sx={{ color: "#e74c3c", fontSize: "18px" }}
+                      >
+                        <FaTrash />
+                      </IconButton>
+                    }
+                  >
                     <Box
                       sx={{
                         display: "flex",
@@ -127,11 +146,13 @@ const ActivityDialog = ({ open, onClose, loginActivities }) => {
                         flexDirection: "column",
                       }}
                     >
-                      <Box sx={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        width: '100%'
-                      }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          width: "100%",
+                        }}
+                      >
                         <Box
                           sx={{
                             minWidth: "30px",
@@ -151,34 +172,39 @@ const ActivityDialog = ({ open, onClose, loginActivities }) => {
                           secondary={
                             <>
                               <Box component="span" display="block">
-                                Device: {activity.device.type} {activity.device.model && `(${activity.device.model})`}
+                                Device: {activity.device.type}{" "}
+                                {activity.device.model &&
+                                  `(${activity.device.model})`}
                               </Box>
                               <Box component="span" display="block">
-                                OS: {activity.device.os} | Browser: {activity.device.browser}
+                                OS: {activity.device.os} | Browser:{" "}
+                                {activity.device.browser}
                               </Box>
                               <Box component="span" display="block">
-                                IP: {activity.ip || 'Not available'}
+                                IP: {activity.ip || "Not available"}
                               </Box>
                             </>
                           }
                           primaryTypographyProps={{
                             fontFamily: "Calibri, sans-serif",
-                            color: "#fff"
+                            color: "#fff",
                           }}
                           secondaryTypographyProps={{
                             fontFamily: "Calibri, sans-serif",
                             color: "#94a3b8",
-                            fontSize: "0.8rem"
+                            fontSize: "0.8rem",
                           }}
                         />
                       </Box>
                       {activity.location && (
-                        <Box sx={{ 
-                          marginLeft: '45px',
-                          color: '#64748b',
-                          fontSize: '0.75rem',
-                          fontFamily: 'Raleway, sans-serif'
-                        }}>
+                        <Box
+                          sx={{
+                            marginLeft: "45px",
+                            color: "#64748b",
+                            fontSize: "0.75rem",
+                            fontFamily: "Raleway, sans-serif",
+                          }}
+                        >
                           Approximate location: {activity.location}
                         </Box>
                       )}
@@ -200,10 +226,7 @@ const ActivityDialog = ({ open, onClose, loginActivities }) => {
       <DialogActions>
         <Button
           onClick={onClose}
-          sx={{
-            color: "#fff",
-            fontFamily: "Raleway, sans-serif",
-          }}
+          sx={{ color: "#fff", fontFamily: "Raleway, sans-serif" }}
         >
           Close
         </Button>
@@ -295,6 +318,49 @@ const Profile = () => {
     event.preventDefault();
   };
 
+  const handleDeleteActivity = async (activityId) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      let userRef;
+      const googleUserDoc = await getDoc(doc(db, "google", user.uid));
+      if (googleUserDoc.exists()) {
+        userRef = doc(db, "google", user.uid);
+      } else {
+        userRef = doc(db, "email", user.uid);
+      }
+
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const currentActivities = userDoc.data().loginActivities || [];
+
+        const updatedActivities = currentActivities.filter(
+          (activity) => (activity.id || activity.timestamp) !== activityId
+        );
+
+        await updateDoc(userRef, {
+          loginActivities: updatedActivities,
+        });
+
+        setLoginActivities(updatedActivities);
+
+        setSnackbar({
+          open: true,
+          message: "Activity deleted successfully",
+          severity: "success",
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to delete activity",
+        severity: "error",
+      });
+    }
+  };
+
   const fetchLoginActivity = async () => {
     const user = auth.currentUser;
     if (!user) return;
@@ -310,17 +376,14 @@ const Profile = () => {
 
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
-        // Enhance activities with location data if not already present
         const activities = userDoc.data().loginActivities || [];
         const enhancedActivities = await Promise.all(
           activities.map(async (activity) => {
             if (activity.location || !activity.ip) return activity;
-
             const location = await getLocationFromIP(activity.ip);
             return location ? { ...activity, location } : activity;
           })
         );
-
         setLoginActivities(enhancedActivities);
       }
     } catch (error) {
@@ -352,8 +415,9 @@ const Profile = () => {
         const user = auth.currentUser;
         if (user) {
           try {
-            if (user.providerData && user.providerData[0]) {
-              setAuthProvider(user.providerData[0].providerId);
+            if (user.providerData && user.providerData.length > 0) {
+              const provider = user.providerData[0].providerId;
+              setAuthProvider(provider);
             }
 
             const googleUserRef = doc(db, "google", user.uid);
@@ -466,17 +530,6 @@ const Profile = () => {
       ...prev,
       [name]: value,
     }));
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      sessionStorage.removeItem("user");
-      localStorage.removeItem("user");
-      navigate("/signin");
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
   };
 
   const handlePasswordInputChange = (e) => {
@@ -654,22 +707,6 @@ const Profile = () => {
           >
             Profile
           </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<FaSignOutAlt />}
-            onClick={handleSignOut}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-              borderColor: "#e74a3b",
-              color: "#e74a3b",
-              "&:hover": {
-                backgroundColor: "#e74a3b20",
-              },
-            }}
-          >
-            Sign Out
-          </Button>
         </Box>
 
         <Grid container spacing={3}>
@@ -775,7 +812,7 @@ const Profile = () => {
               </Typography>
 
               <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={20}>
                   <InfoBox
                     icon={<FaUser style={{ color: "#4e73df" }} />}
                     title="Full Name"
@@ -829,7 +866,7 @@ const Profile = () => {
                 padding: "25px",
                 borderRadius: "40px",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
-                height: "35%",
+                height: "28%",
               }}
             >
               <Typography
@@ -853,15 +890,7 @@ const Profile = () => {
                     />
                   </Grid>
                 )}
-                <Grid item xs={12} sm={6}>
-                  <SettingButton
-                    title="Notification Settings"
-                    color="#1cc88a"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <SettingButton title="Privacy Settings" color="#f6c23e" />
-                </Grid>
+                
                 <Grid item xs={12} sm={6}>
                   <SettingButton
                     title="Login Activity"
@@ -872,11 +901,11 @@ const Profile = () => {
               </Grid>
             </Box>
 
-            {/* Activity Dialog */}
             <ActivityDialog
               open={activityDialogOpen}
               onClose={() => setActivityDialogOpen(false)}
               loginActivities={loginActivities}
+              onDeleteActivity={handleDeleteActivity}
             />
           </Grid>
         </Grid>
