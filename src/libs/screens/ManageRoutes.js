@@ -48,7 +48,6 @@ import {
   faEllipsisVertical,
   faTrash,
   faEdit,
-  faEye,
   faRoute,
   faSave,
   faSearch,

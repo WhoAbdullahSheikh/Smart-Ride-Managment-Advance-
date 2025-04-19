@@ -3,10 +3,6 @@ import {
   Box,
   Typography,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   CircularProgress,
   Snackbar,
   Alert,
@@ -17,27 +13,19 @@ import {
   ListItemIcon,
   ListItemText,
 } from "@mui/material";
-import { motion } from "framer-motion";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faEdit } from "@fortawesome/free-solid-svg-icons";
+import { motion, px } from "framer-motion";
 import {
   FaRoute,
   FaTruck,
   FaMapMarkerAlt,
   FaPlus,
   FaEllipsisV,
-  FaEdit,
-  FaTrash,
-  FaDirections,
-  FaLocationArrow,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
-import {
-  collection,
-  getDocs,
-  doc,
-  deleteDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { LoadScript, GoogleMap, Marker } from "@react-google-maps/api";
 import { TrafficLayer } from "@react-google-maps/api";
 
@@ -67,6 +55,7 @@ const Dashboard = () => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [mapCenter, setMapCenter] = useState(PAKISTAN_CENTER);
+  const [showMapLoadMessage, setShowMapLoadMessage] = useState(true);
 
   const openMenu = Boolean(anchorEl);
 
@@ -104,24 +93,8 @@ const Dashboard = () => {
     setAnchorEl(null);
   };
 
-  const handleDeleteRoute = async () => {
-    try {
-      await deleteDoc(doc(db, "routes", selectedRoute.id));
-      setRoutes(routes.filter((route) => route.id !== selectedRoute.id));
-      setSnackbar({
-        open: true,
-        message: "Route deleted successfully",
-        severity: "success",
-      });
-    } catch (error) {
-      console.error("Error deleting route: ", error);
-      setSnackbar({
-        open: true,
-        message: "Failed to delete route",
-        severity: "error",
-      });
-    }
-    handleMenuClose();
+  const handleEditRoute = async () => {
+    navigate("/dashboard/manageroutes");
   };
 
   const handleAddRoute = () => {
@@ -130,6 +103,7 @@ const Dashboard = () => {
 
   const handleMapLoad = () => {
     setMapLoaded(true);
+    setShowMapLoadMessage(false);
   };
 
   const handleSnackbarClose = () => {
@@ -143,6 +117,37 @@ const Dashboard = () => {
       transition={{ duration: 0.3 }}
     >
       <Box>
+        {/* Map load alert */}
+        <Snackbar
+          open={showMapLoadMessage}
+          autoHideDuration={6000}
+          onClose={() => setShowMapLoadMessage(false)}
+          anchorOrigin={{ vertical: "top", horizontal: "right" }}
+          sx={{
+            "& .MuiSnackbar-root": {
+              top: "24px",
+              right: "24px",
+            },
+          }}
+        >
+          <Alert
+            onClose={() => setShowMapLoadMessage(false)}
+            severity="info"
+            sx={{ width: "100%" }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => window.location.reload()}
+              >
+                Refresh
+              </Button>
+            }
+          >
+            If the map doesn't load properly, please refresh your page.
+          </Alert>
+        </Snackbar>
+
         <Typography
           variant="h4"
           sx={{
@@ -392,6 +397,14 @@ const Dashboard = () => {
               googleMapsApiKey="AIzaSyByATEojq4YfKfzIIrRFA_1sAkKNKsnNeQ"
               libraries={libraries}
               onLoad={handleMapLoad}
+              onError={() => {
+                setSnackbar({
+                  open: true,
+                  message: "Map failed to load. Please refresh your page.",
+                  severity: "error",
+                });
+                setShowMapLoadMessage(true);
+              }}
             >
               {mapLoaded ? (
                 <GoogleMap
@@ -412,14 +425,8 @@ const Dashboard = () => {
                     ],
                   }}
                 >
-                  {}
-                  {mapLoaded && (
-                    <div>
-                      <TrafficLayer autoUpdate />
-                    </div>
-                  )}
+                  {mapLoaded && <TrafficLayer autoUpdate />}
 
-                  {}
                   {routes.map((route) => {
                     if (!route.originCoordinates) return null;
 
@@ -467,7 +474,7 @@ const Dashboard = () => {
 
             {selectedRoute && (
               <Box sx={{ mt: 3 }}>
-                <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="h4" gutterBottom>
                   Route Details
                 </Typography>
                 <Box
@@ -477,21 +484,10 @@ const Dashboard = () => {
                     gap: 2,
                   }}
                 >
-                  <DetailItem label="Origin" value={selectedRoute.origin} />
-                  <DetailItem
-                    label="Coordinates"
-                    value={
-                      selectedRoute.originCoordinates
-                        ? `${selectedRoute.originCoordinates.latitude?.toFixed(
-                            6
-                          )}, ${selectedRoute.originCoordinates.longitude?.toFixed(
-                            6
-                          )}`
-                        : "Not available"
-                    }
-                  />
+                  <DetailItem label="Route Name" value={selectedRoute.name} />
                   <DetailItem
                     label="Status"
+                   
                     value={
                       <Chip
                         label={selectedRoute.status}
@@ -501,7 +497,39 @@ const Dashboard = () => {
                             ? "success"
                             : "default"
                         }
+                        sx={{
+                          marginLeft: 2,
+                        }}
                       />
+                    }
+                  />
+                  <DetailItem label="Origin" value={selectedRoute.origin} />
+                  <DetailItem
+                    label="Destination"
+                    value={selectedRoute.destination}
+                  />
+                  <DetailItem
+                    label="Origin Coordinates"
+                    value={
+                      selectedRoute.originCoordinates
+                        ? `Latitude: ${selectedRoute.originCoordinates.latitude?.toFixed(
+                            6
+                          )}, Longitude: ${selectedRoute.originCoordinates.longitude?.toFixed(
+                            6
+                          )}`
+                        : "Not available"
+                    }
+                  />
+                  <DetailItem
+                    label="Destination Coordinates"
+                    value={
+                      selectedRoute.destinationCoordinates
+                        ? `Latitude: ${selectedRoute.destinationCoordinates.latitude?.toFixed(
+                            6
+                          )}, Longitude: ${selectedRoute.destinationCoordinates.longitude?.toFixed(
+                            6
+                          )}`
+                        : "Not available"
                     }
                   />
                   <DetailItem
@@ -543,12 +571,12 @@ const Dashboard = () => {
             </ListItemIcon>
             <ListItemText>View Origin</ListItemText>
           </MenuItem>
-          
-          <MenuItem onClick={handleDeleteRoute}>
+
+          <MenuItem onClick={handleEditRoute}>
             <ListItemIcon>
-              <FaTrash />
+              <FontAwesomeIcon icon={faEdit} fontSize="small" />
             </ListItemIcon>
-            <ListItemText>Delete Route</ListItemText>
+            <ListItemText>Edit</ListItemText>
           </MenuItem>
         </Menu>
 

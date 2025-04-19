@@ -267,7 +267,7 @@ const CreateRoutes = () => {
         {}
         <Snackbar
           open={showMapLoadMessage}
-          autoHideDuration={6000}
+          autoHideDuration={16000}
           onClose={() => setShowMapLoadMessage(false)}
           anchorOrigin={{ vertical: "top", horizontal: "right" }}
           sx={{
