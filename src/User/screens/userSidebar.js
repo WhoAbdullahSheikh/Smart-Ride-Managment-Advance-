@@ -27,28 +27,14 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
     { 
       name: "Home", 
       icon: <FaHome />, 
-      path: "/dashboard"
+      path: "/userdashboard"
     },
     {
       name: "Routes",
       icon: <FaRoute />,
-      path: "/dashboard/createroutes"
+      path: "/userdashboard/viewroutes"
     },
-    {
-      name: "Manage Routes",
-      icon: <FaRoute />,
-      path: "/dashboard/manageroutes"
-    },
-    {
-      name: "Users",
-      icon: <FaUsers />,
-      path: "/dashboard/users"
-    },
-    {
-      name: "Drivers",
-      icon: <FaCar />,
-      path: "/dashboard/drivers"
-    },
+
   ];
 
   const handleSignOut = async () => {
@@ -66,7 +52,7 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
     {
       name: "Profile",
       icon: <FaUser />,
-      path: "/dashboard/profile"
+      path: "/userdashboard/userprofile"
     },
     {
       name: "Sign Out",

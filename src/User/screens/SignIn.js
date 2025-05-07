@@ -21,11 +21,11 @@ import {
   GoogleAuthProvider, 
   signInWithPopup 
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth } from "../../libs/firebase";
 import { arrayUnion, updateDoc } from "firebase/firestore";
-import backgroundImage from "../../assets/images/img.jpg";
+import backgroundImage from "../../assets/images/login.png";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../../libs/firebase";
 import GoogleLogo from "../../assets/svg/google.svg";
 
 const SignIn = () => {
@@ -147,7 +147,7 @@ const SignIn = () => {
       setOpenSnackbar(true);
   
       setTimeout(() => {
-        navigate("/dashboard");
+        navigate("/userdashboard");
       }, 2000);
     } catch (error) {
       console.error("Error signing in:", error);
@@ -214,7 +214,7 @@ const SignIn = () => {
         setOpenSnackbar(true);
 
         setTimeout(() => {
-          navigate("/dashboard");
+          navigate("/userdashboard");
         }, 2000);
       } else {
         await auth.signOut();

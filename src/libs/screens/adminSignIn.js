@@ -18,17 +18,14 @@ import { FaEnvelope, FaLock } from "react-icons/fa";
 import { 
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
-  GoogleAuthProvider, 
-  signInWithPopup 
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { arrayUnion, updateDoc } from "firebase/firestore";
 import backgroundImage from "../../assets/images/img.jpg";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import GoogleLogo from "../../assets/svg/google.svg";
 
-const SignIn = () => {
+const AdminSignIn = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -95,7 +92,7 @@ const SignIn = () => {
         throw new Error("Please verify your email before signing in.");
       }
   
-      const emailUserRef = doc(db, "email", user.uid);
+      const emailUserRef = doc(db, "admin", user.uid);
       const emailUserDoc = await getDoc(emailUserRef);
   
       if (!emailUserDoc.exists()) {
@@ -164,67 +161,6 @@ const SignIn = () => {
       }
   
       setSnackbarMessage(errorMessage);
-      setSnackbarSeverity("error");
-      setOpenSnackbar(true);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
-
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      const userRef = doc(db, "google", user.uid);
-      const userSnapshot = await getDoc(userRef);
-
-      if (userSnapshot.exists()) {
-        const loginActivity = {
-          timestamp: new Date().toISOString(),
-          device: getDeviceInfo(),
-          ip: await fetch("https://api.ipify.org?format=json")
-            .then((response) => response.json())
-            .then((data) => data.ip)
-            .catch(() => "IP not available"),
-        };
-
-        await updateDoc(userRef, {
-          loginActivities: arrayUnion(loginActivity),
-        });
-
-        const userData = userSnapshot.data().userData || userSnapshot.data();
-
-        sessionStorage.setItem(
-          "user",
-          JSON.stringify({
-            ...userData,
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            createdAt: userData.createdAt || {
-              seconds: Math.floor(Date.now() / 1000),
-            },
-          })
-        );
-
-        setSnackbarMessage("Successfully logged in with Google!");
-        setSnackbarSeverity("success");
-        setOpenSnackbar(true);
-
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 2000);
-      } else {
-        await auth.signOut();
-        setSnackbarMessage("This Google account is not registered.");
-        setSnackbarSeverity("error");
-        setOpenSnackbar(true);
-      }
-    } catch (error) {
-      console.error("Error during Google sign-in:", error);
-      setSnackbarMessage("Error during Google sign-in. Please try again.");
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
     }
@@ -458,60 +394,6 @@ const SignIn = () => {
             </Button>
           </Box>
 
-          <Box sx={{ mt: 3, textAlign: "center", width: "100%" }}>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              Or
-            </Typography>
-            <Button
-              onClick={handleGoogleSignIn}
-              fullWidth
-              variant="contained"
-              color="#0f1728"
-              sx={{
-                mt: 2,
-                py: 1,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                color: "#fff",
-                backgroundColor: "#0f1728",
-                textTransform: "none",
-                fontFamily: "Raleway, sans-serif",
-                borderRadius: "10px",
-                "&:hover": {
-                  backgroundColor: "rgba(15, 23, 40, 0.9)",
-                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                  transform: "scale(1.01)",
-                },
-              }}
-            >
-              <img
-                src={GoogleLogo}
-                alt="Google logo"
-                style={{ marginRight: "10px", width: "20px", height: "20px" }}
-              />
-              Continue with Google
-            </Button>
-          </Box>
-
-          <Box sx={{ mt: 2 }}>
-            <Typography
-              variant="body2"
-              style={{ fontFamily: "Raleway, sans-serif" }}
-            >
-              Don't have an account?{" "}
-              <Link
-                to="/signup"
-                style={{
-                  color: "#0f1728",
-                  textDecoration: "none",
-                  fontFamily: "Raleway-Bold, sans-serif",
-                }}
-              >
-                Sign Up
-              </Link>
-            </Typography>
-          </Box>
 
           {/* Forgot Password Dialog */}
           <Dialog
@@ -586,4 +468,4 @@ const SignIn = () => {
   );
 };
 
-export default SignIn;
+export default AdminSignIn;

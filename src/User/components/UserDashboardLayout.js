@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Box } from "@mui/material";
-import Sidebar from "../screens/Sidebar";
+import Sidebar from "../screens/userSidebar";
 
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -10,12 +10,9 @@ const DashboardLayout = () => {
 
   useEffect(() => {
     const pathToButtonMap = {
-      "/dashboard": "Home",
-      "/dashboard/profile": "Profile",
-      "/dashboard/createroutes": "Routes",
-      "/dashboard/users": "Users",
-      "/dashboard/drivers": "Drivers",
-      "/dashboard/manageroutes": "Manage Routes",
+      "/userdashboard": "Home",
+      "/userdashboard/userprofile": "Profile",
+      "/userdashboard/viewroutes": "Routes",
     };
     
     const currentButton = Object.entries(pathToButtonMap).find(

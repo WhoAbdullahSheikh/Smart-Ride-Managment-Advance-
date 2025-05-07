@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import GoogleAuth from "../auth/GoogleAuth";
+import GoogleAuth from "../../user/auth/GoogleAuth";
 import {
   TextField,
   Button,
@@ -14,7 +14,7 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification 
 } from "firebase/auth";
-import { auth, db } from "../firebase";
+import { auth, db } from "../../libs/firebase";
 import {
   doc,
   setDoc,
@@ -26,7 +26,7 @@ import {
   updateDoc
 } from "firebase/firestore";
 import { Link, useNavigate } from "react-router-dom";
-import backgroundImage from "../../assets/images/img.jpg";
+import backgroundImage from "../../assets/images/login.png";
 import { serverTimestamp } from "firebase/firestore";
 
 const SignUp = () => {
@@ -101,7 +101,7 @@ const SignUp = () => {
   
       await sendEmailVerification(user);
   
-      const userRef = doc(db, "email", user.uid);
+      const userRef = doc(db, "admin", user.uid);
   
       await setDoc(userRef, {
         userData: {

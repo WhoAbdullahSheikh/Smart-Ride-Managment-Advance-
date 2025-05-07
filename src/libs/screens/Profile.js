@@ -324,12 +324,10 @@ const Profile = () => {
       if (!user) return;
 
       let userRef;
-      const googleUserDoc = await getDoc(doc(db, "google", user.uid));
+      const googleUserDoc = await getDoc(doc(db, "admin", user.uid));
       if (googleUserDoc.exists()) {
-        userRef = doc(db, "google", user.uid);
-      } else {
-        userRef = doc(db, "email", user.uid);
-      }
+        userRef = doc(db, "admin", user.uid);
+      } 
 
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
@@ -367,11 +365,9 @@ const Profile = () => {
 
     try {
       let userRef;
-      const googleUserDoc = await getDoc(doc(db, "google", user.uid));
+      const googleUserDoc = await getDoc(doc(db, "admin", user.uid));
       if (googleUserDoc.exists()) {
-        userRef = doc(db, "google", user.uid);
-      } else {
-        userRef = doc(db, "email", user.uid);
+        userRef = doc(db, "admin", user.uid);
       }
 
       const userDoc = await getDoc(userRef);

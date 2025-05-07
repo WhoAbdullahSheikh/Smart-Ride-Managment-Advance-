@@ -275,7 +275,7 @@ const getLocationFromIP = async (ip) => {
   }
 };
 
-const Profile = () => {
+const UserProfile = () => {
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1361,4 +1361,4 @@ const SettingButton = ({ title, color, onClick }) => (
   </Button>
 );
 
-export default Profile;
+export default UserProfile;

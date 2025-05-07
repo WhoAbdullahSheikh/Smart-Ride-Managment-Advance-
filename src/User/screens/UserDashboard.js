@@ -2,27 +2,14 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
-  Button,
   CircularProgress,
   Snackbar,
   Alert,
+  Button,
   Chip,
-  IconButton,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
 } from "@mui/material";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit } from "@fortawesome/free-solid-svg-icons";
-import { motion, px } from "framer-motion";
-import {
-  FaRoute,
-  FaTruck,
-  FaMapMarkerAlt,
-  FaPlus,
-  FaEllipsisV,
-} from "react-icons/fa";
+import { motion } from "framer-motion";
+import { FaRoute, FaTruck, FaMapMarkerAlt } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
@@ -42,7 +29,7 @@ const PAKISTAN_CENTER = {
 
 const libraries = ["places"];
 
-const Dashboard = () => {
+const UserDashboard = () => {
   const navigate = useNavigate();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,11 +40,8 @@ const Dashboard = () => {
   });
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null);
   const [mapCenter, setMapCenter] = useState(PAKISTAN_CENTER);
   const [showMapLoadMessage, setShowMapLoadMessage] = useState(true);
-
-  const openMenu = Boolean(anchorEl);
 
   const fetchRoutes = useCallback(async () => {
     try {
@@ -83,23 +67,6 @@ const Dashboard = () => {
   useEffect(() => {
     fetchRoutes();
   }, [fetchRoutes]);
-
-  const handleMenuClick = (event, route) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedRoute(route);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleEditRoute = async () => {
-    navigate("/dashboard/manageroutes");
-  };
-
-  const handleAddRoute = () => {
-    navigate("/dashboard/createroutes");
-  };
 
   const handleMapLoad = () => {
     setMapLoaded(true);
@@ -157,7 +124,7 @@ const Dashboard = () => {
             fontFamily: "Raleway-Bold, sans-serif",
           }}
         >
-          Route Management <FaRoute style={{ marginLeft: "10px" }} />
+          Route Information <FaRoute style={{ marginLeft: "10px" }} />
         </Typography>
 
         <Box
@@ -166,7 +133,7 @@ const Dashboard = () => {
             gridTemplateColumns: {
               xs: "1fr",
               sm: "repeat(2, 1fr)",
-              md: "repeat(4, 1fr)",
+              md: "repeat(3, 1fr)",
             },
             gap: 3,
             marginBottom: "30px",
@@ -193,54 +160,6 @@ const Dashboard = () => {
             )}
             color="#f6c23e"
           />
-          <Box
-            sx={{
-              background: "#0f1728",
-              color: "#fff",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: 1,
-              borderLeft: "4px solid #36b9cc",
-              display: "flex",
-              alignItems: "center",
-              gap: "15px",
-            }}
-          >
-            <Box
-              sx={{
-                backgroundColor: "#36b9cc20",
-                color: "#36b9cc",
-                borderRadius: "50%",
-                width: "50px",
-                height: "50px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "20px",
-              }}
-            >
-              <FaPlus />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  color: "#7f8c8d",
-                  fontFamily: "Raleway-Bold, sans-serif",
-                }}
-              >
-                Manage Routes
-              </Typography>
-              <Button
-                variant="contained"
-                onClick={handleAddRoute}
-                sx={{ mt: 1, width: "100%", backgroundColor: "green" }}
-                startIcon={<FaPlus />}
-              >
-                Add Route
-              </Button>
-            </Box>
-          </Box>
         </Box>
 
         <Box
@@ -273,7 +192,7 @@ const Dashboard = () => {
                 variant="h6"
                 sx={{ fontFamily: "Raleway, sans-serif" }}
               >
-                Saved Routes
+                Available Routes
               </Typography>
               {loading && <CircularProgress size={24} />}
             </Box>
@@ -281,16 +200,8 @@ const Dashboard = () => {
             {routes.length === 0 && !loading ? (
               <Box sx={{ textAlign: "center", py: 4 }}>
                 <Typography variant="body1" color="text.secondary">
-                  No routes found. Create your first route to get started.
+                  No routes available.
                 </Typography>
-                <Button
-                  variant="outlined"
-                  onClick={handleAddRoute}
-                  sx={{ mt: 2, color: "white", backgroundColor: "green" }}
-                  startIcon={<FaPlus />}
-                >
-                  Add Route
-                </Button>
               </Box>
             ) : (
               <Box
@@ -348,16 +259,6 @@ const Dashboard = () => {
                           {route.waypoints.length !== 1 ? "s" : ""}
                         </Typography>
                       )}
-                    </Box>
-                    <Box sx={{ display: "flex", alignItems: "center" }}>
-                      <IconButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMenuClick(e, route);
-                        }}
-                      >
-                        <FaEllipsisV />
-                      </IconButton>
                     </Box>
                   </li>
                 ))}
@@ -487,7 +388,6 @@ const Dashboard = () => {
                   <DetailItem label="Route Name" value={selectedRoute.name} />
                   <DetailItem
                     label="Status"
-                   
                     value={
                       <Chip
                         label={selectedRoute.status}
@@ -541,44 +441,6 @@ const Dashboard = () => {
             )}
           </Box>
         </Box>
-
-        <Menu
-          anchorEl={anchorEl}
-          open={openMenu}
-          onClose={handleMenuClose}
-          anchorOrigin={{
-            vertical: "top",
-            horizontal: "right",
-          }}
-          transformOrigin={{
-            vertical: "top",
-            horizontal: "right",
-          }}
-        >
-          <MenuItem
-            onClick={() => {
-              if (selectedRoute?.originCoordinates) {
-                setMapCenter({
-                  lat: selectedRoute.originCoordinates.latitude,
-                  lng: selectedRoute.originCoordinates.longitude,
-                });
-              }
-              handleMenuClose();
-            }}
-          >
-            <ListItemIcon>
-              <FaMapMarkerAlt />
-            </ListItemIcon>
-            <ListItemText>View Origin</ListItemText>
-          </MenuItem>
-
-          <MenuItem onClick={handleEditRoute}>
-            <ListItemIcon>
-              <FontAwesomeIcon icon={faEdit} fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Edit</ListItemText>
-          </MenuItem>
-        </Menu>
 
         <Snackbar
           open={snackbar.open}
@@ -658,4 +520,4 @@ const DetailItem = ({ label, value }) => (
   </Box>
 );
 
-export default Dashboard;
+export default UserDashboard;

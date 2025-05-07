@@ -10,7 +10,6 @@ import {
   TableRow,
   Paper,
   CircularProgress,
-  Avatar,
   Chip,
   IconButton,
   Menu,
@@ -26,57 +25,64 @@ import {
   DialogActions,
   Button,
 } from "@mui/material";
-import { collection, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "../firebase";
 import { motion } from "framer-motion";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faEllipsisVertical, 
-  faTrash, 
-  faBan, 
-  faCircleCheck 
-} from '@fortawesome/free-solid-svg-icons';
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faEllipsisVertical,
+  faTrash,
+  faBan,
+  faCircleCheck,
+  faEdit,
+} from "@fortawesome/free-solid-svg-icons";
 
-const Users = () => {
-  const [users, setUsers] = useState([]);
+const ViewRoutes = () => {
+  const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedRoute, setSelectedRoute] = useState(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "info",
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
+    fetchRoutes();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchRoutes = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "users"));
-      const usersData = querySnapshot.docs.map((doc) => ({
+      const querySnapshot = await getDocs(collection(db, "routes"));
+      const routesData = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      setUsers(usersData);
+      setRoutes(routesData);
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching users:", error);
+      console.error("Error fetching routes:", error);
       setSnackbar({
         open: true,
-        message: "Failed to load users",
+        message: "Failed to load routes",
         severity: "error",
       });
       setLoading(false);
     }
   };
 
-  const handleMenuOpen = (event, user) => {
+  const handleMenuOpen = (event, route) => {
     setAnchorEl(event.currentTarget);
-    setSelectedUser(user);
+    setSelectedRoute(route);
   };
 
   const handleMenuClose = () => {
@@ -88,25 +94,25 @@ const Users = () => {
     handleMenuClose();
   };
 
-  const handleSuspendClick = () => {
-    setSuspendDialogOpen(true);
+  const handleStatusClick = () => {
+    setStatusDialogOpen(true);
     handleMenuClose();
   };
 
-  const handleDeleteUser = async () => {
+  const handleDeleteRoute = async () => {
     try {
-      await deleteDoc(doc(db, "users", selectedUser.id));
-      setUsers(users.filter((user) => user.id !== selectedUser.id));
+      await deleteDoc(doc(db, "routes", selectedRoute.id));
+      setRoutes(routes.filter((route) => route.id !== selectedRoute.id));
       setSnackbar({
         open: true,
-        message: "User deleted successfully",
+        message: "Route deleted successfully",
         severity: "success",
       });
     } catch (error) {
-      console.error("Error deleting user:", error);
+      console.error("Error deleting route:", error);
       setSnackbar({
         open: true,
-        message: "Failed to delete user",
+        message: "Failed to delete route",
         severity: "error",
       });
     }
@@ -116,39 +122,47 @@ const Users = () => {
   const handleToggleStatus = async () => {
     try {
       const newStatus =
-        selectedUser.status === "active" ? "suspended" : "active";
-      await updateDoc(doc(db, "users", selectedUser.id), {
+        selectedRoute.status === "active" ? "inactive" : "active";
+      await updateDoc(doc(db, "routes", selectedRoute.id), {
         status: newStatus,
+        updatedAt: new Date(),
       });
 
-      setUsers(
-        users.map((user) =>
-          user.id === selectedUser.id ? { ...user, status: newStatus } : user
+      setRoutes(
+        routes.map((route) =>
+          route.id === selectedRoute.id
+            ? { ...route, status: newStatus }
+            : route
         )
       );
 
       setSnackbar({
         open: true,
-        message: `User ${
-          newStatus === "active" ? "activated" : "suspended"
+        message: `Route ${
+          newStatus === "active" ? "activated" : "deactivated"
         } successfully`,
         severity: "success",
       });
     } catch (error) {
-      console.error("Error updating user status:", error);
+      console.error("Error updating route status:", error);
       setSnackbar({
         open: true,
-        message: "Failed to update user status",
+        message: "Failed to update route status",
         severity: "error",
       });
     }
-    setSuspendDialogOpen(false);
+    setStatusDialogOpen(false);
   };
 
   const formatDate = (timestamp) => {
     if (!timestamp) return "N/A";
     const date = timestamp.toDate();
     return date.toLocaleString();
+  };
+
+  const formatCoordinates = (coords) => {
+    if (!coords) return "N/A";
+    return `${coords.latitude?.toFixed(6)}, ${coords.longitude?.toFixed(6)}`;
   };
 
   const handleCloseSnackbar = () => {
@@ -163,7 +177,7 @@ const Users = () => {
     >
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
-          User Management
+          Route Management
         </Typography>
 
         {loading ? (
@@ -172,50 +186,38 @@ const Users = () => {
           </Box>
         ) : (
           <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-            <Table sx={{ minWidth: 650 }} aria-label="users table">
+            <Table sx={{ minWidth: 650 }} aria-label="routes table">
               <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
                 <TableRow>
-                  <TableCell>User</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Phone</TableCell>
-                  <TableCell>Joined</TableCell>
+                  <TableCell>Route Name</TableCell>
+                  <TableCell>Origin</TableCell>
+                  <TableCell>Destination</TableCell>
+                  <TableCell>Created At</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {users.map((user) => (
+                {routes.map((route) => (
                   <TableRow
-                    key={user.id}
+                    key={route.id}
                     sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                   >
-                    <TableCell>
-                      <Box sx={{ display: "flex", alignItems: "center" }}>
-                        <Avatar
-                          src={user.photoURL || ""}
-                          sx={{ mr: 2, bgcolor: "primary.main" }}
-                        >
-                          {user.name?.charAt(0) || "U"}
-                        </Avatar>
-                        {user.email}
-                      </Box>
-                    </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.name || "N/A"}</TableCell>
-                    <TableCell>{user.phone || "N/A"}</TableCell>
-                    <TableCell>{formatDate(user.createdAt)}</TableCell>
+                    <TableCell>{route.name}</TableCell>
+                    <TableCell>{route.origin}</TableCell>
+                    <TableCell>{route.destination}</TableCell>
+                    <TableCell>{formatDate(route.createdAt)}</TableCell>
                     <TableCell>
                       <Chip
-                        label={user.status || "active"}
-                        color={user.status === "active" ? "success" : "error"}
+                        label={route.status || "active"}
+                        color={route.status === "active" ? "success" : "error"}
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
                       <IconButton
                         aria-label="actions"
-                        onClick={(e) => handleMenuOpen(e, user)}
+                        onClick={(e) => handleMenuOpen(e, route)}
                       >
                         <FontAwesomeIcon icon={faEllipsisVertical} />
                       </IconButton>
@@ -232,15 +234,17 @@ const Users = () => {
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-          <MenuItem onClick={handleSuspendClick}>
+          <MenuItem onClick={handleStatusClick}>
             <ListItemIcon>
-              <FontAwesomeIcon 
-                icon={selectedUser?.status === "active" ? faBan : faCircleCheck} 
-                fontSize="small" 
+              <FontAwesomeIcon
+                icon={
+                  selectedRoute?.status === "active" ? faBan : faCircleCheck
+                }
+                fontSize="small"
               />
             </ListItemIcon>
             <ListItemText>
-              {selectedUser?.status === "active" ? "Suspend" : "Activate"}
+              {selectedRoute?.status === "active" ? "Deactivate" : "Activate"}
             </ListItemText>
           </MenuItem>
           <MenuItem onClick={handleDeleteClick}>
@@ -251,7 +255,6 @@ const Users = () => {
           </MenuItem>
         </Menu>
 
-        {}
         <Dialog
           open={deleteDialogOpen}
           onClose={() => setDeleteDialogOpen(false)}
@@ -259,54 +262,54 @@ const Users = () => {
           aria-describedby="alert-dialog-description"
         >
           <DialogTitle id="alert-dialog-title">
-            {"Confirm User Deletion"}
+            {"Confirm Route Deletion"}
           </DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
-              Are you sure you want to permanently delete{" "}
-              {selectedUser?.name || "this user"}? This action cannot be undone.
+              Are you sure you want to permanently delete the route{" "}
+              {selectedRoute?.name || "this route"}? This action cannot be
+              undone.
             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleDeleteUser} color="error" autoFocus>
+            <Button onClick={handleDeleteRoute} color="error" autoFocus>
               Delete
             </Button>
           </DialogActions>
         </Dialog>
 
-        {}
         <Dialog
-          open={suspendDialogOpen}
-          onClose={() => setSuspendDialogOpen(false)}
+          open={statusDialogOpen}
+          onClose={() => setStatusDialogOpen(false)}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
           <DialogTitle id="alert-dialog-title">
-            {selectedUser?.status === "active"
-              ? "Confirm User Suspension"
-              : "Confirm User Activation"}
+            {selectedRoute?.status === "active"
+              ? "Confirm Route Deactivation"
+              : "Confirm Route Activation"}
           </DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
-              {selectedUser?.status === "active"
-                ? `Are you sure you want to suspend ${
-                    selectedUser?.name || "this user"
-                  }? They will lose access to their account.`
-                : `Are you sure you want to activate ${
-                    selectedUser?.name || "this user"
-                  }? They will regain access to their account.`}
+              {selectedRoute?.status === "active"
+                ? `Are you sure you want to deactivate the route "${
+                    selectedRoute?.name || "this route"
+                  }"?`
+                : `Are you sure you want to activate the route "${
+                    selectedRoute?.name || "this route"
+                  }"?`}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setSuspendDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleToggleStatus} color="primary" autoFocus>
-              {selectedUser?.status === "active" ? "Suspend" : "Activate"}
+              {selectedRoute?.status === "active" ? "Deactivate" : "Activate"}
             </Button>
           </DialogActions>
         </Dialog>
 
-        {!loading && users.length === 0 && (
+        {!loading && routes.length === 0 && (
           <Box
             sx={{
               display: "flex",
@@ -319,7 +322,7 @@ const Users = () => {
             }}
           >
             <Typography variant="body1" color="text.secondary">
-              No users found
+              No routes found
             </Typography>
           </Box>
         )}
@@ -343,4 +346,4 @@ const Users = () => {
   );
 };
 
-export default Users;
+export default ViewRoutes;
