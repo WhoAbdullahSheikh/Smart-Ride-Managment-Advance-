@@ -11,158 +11,251 @@ import {
   Paper,
   CircularProgress,
   Chip,
-  IconButton,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
+  Button,
   Snackbar,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Button,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import {
   collection,
   getDocs,
-  deleteDoc,
+  addDoc,
   doc,
   updateDoc,
+  arrayUnion,
+  query,
+  where,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, getAuth } from "../firebase";
 import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faEllipsisVertical,
-  faTrash,
-  faBan,
-  faCircleCheck,
-  faEdit,
+  faCar,
+  faClock,
+  faArrowRight,
+  faSyncAlt,
 } from "@fortawesome/free-solid-svg-icons";
 
 const ViewRoutes = () => {
-  const [routes, setRoutes] = useState([]);
+  const [allRoutes, setAllRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userBookedRoutes, setUserBookedRoutes] = useState([]);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "info",
   });
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-
-  useEffect(() => {
-    fetchRoutes();
-  }, []);
 
   const fetchRoutes = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "routes"));
-      const routesData = querySnapshot.docs.map((doc) => ({
+      const auth = getAuth();
+      const user = auth.currentUser;
+
+      // Fetch all routes
+      const routesQuery = await getDocs(collection(db, "routes"));
+      const routesData = routesQuery.docs.map((doc) => ({
         id: doc.id,
+        routeId: doc.id,
         ...doc.data(),
+        // Convert Firestore Timestamps to Date objects if they exist
+        pickupTime: doc.data().pickupTime?.toDate() || null,
+        dropoffTime: doc.data().dropoffTime?.toDate() || null,
+        createdAt: doc.data().createdAt?.toDate() || null,
+        status: doc.data().status?.toLowerCase() || "active",
       }));
-      setRoutes(routesData);
+      setAllRoutes(routesData);
+
+      if (user) {
+        // Query bookings collection for this user's bookings
+        const bookingsQuery = query(
+          collection(db, "bookings"),
+          where("userEmail", "==", user.email)
+        );
+        const querySnapshot = await getDocs(bookingsQuery);
+
+        const bookedRoutes = querySnapshot.docs.map((doc) => ({
+          routeId: doc.data().routeId,
+          userEmail: doc.data().userEmail,
+        }));
+
+        setUserBookedRoutes(bookedRoutes);
+      }
+
       setLoading(false);
+      setRefreshing(false);
     } catch (error) {
-      console.error("Error fetching routes:", error);
+      console.error("Error fetching data:", error);
       setSnackbar({
         open: true,
         message: "Failed to load routes",
         severity: "error",
       });
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const handleMenuOpen = (event, route) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedRoute(route);
+  useEffect(() => {
+    fetchRoutes();
+  }, []);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchRoutes();
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
+  // Filter out routes that are rejected or user has already booked
+  const availableRoutes = allRoutes.filter((route) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
 
-  const handleDeleteClick = () => {
-    setDeleteDialogOpen(true);
-    handleMenuClose();
-  };
+    // Hide rejected routes
+    if (route.status === "rejected") return false;
 
-  const handleStatusClick = () => {
-    setStatusDialogOpen(true);
-    handleMenuClose();
-  };
+    // Show only active, approved, or cancelled routes
+    const isRouteVisible = ["active", "approved", "cancelled"].includes(
+      route.status
+    );
+    if (!isRouteVisible) return false;
 
-  const handleDeleteRoute = async () => {
+    if (!user) return true; // Show all visible routes if not logged in
+
+    return !userBookedRoutes.some(
+      (booking) =>
+        (booking.routeId === route.id || booking.routeId === route.routeId) &&
+        booking.userEmail === user.email
+    );
+  });
+
+  const handleBookRide = async (route) => {
     try {
-      await deleteDoc(doc(db, "routes", selectedRoute.id));
-      setRoutes(routes.filter((route) => route.id !== selectedRoute.id));
-      setSnackbar({
-        open: true,
-        message: "Route deleted successfully",
-        severity: "success",
-      });
-    } catch (error) {
-      console.error("Error deleting route:", error);
-      setSnackbar({
-        open: true,
-        message: "Failed to delete route",
-        severity: "error",
-      });
-    }
-    setDeleteDialogOpen(false);
-  };
+      const auth = getAuth();
+      const user = auth.currentUser;
 
-  const handleToggleStatus = async () => {
-    try {
-      const newStatus =
-        selectedRoute.status === "active" ? "inactive" : "active";
-      await updateDoc(doc(db, "routes", selectedRoute.id), {
-        status: newStatus,
-        updatedAt: new Date(),
-      });
+      if (!user) {
+        setSnackbar({
+          open: true,
+          message: "You must be logged in to book a ride",
+          severity: "error",
+        });
+        return;
+      }
 
-      setRoutes(
-        routes.map((route) =>
-          route.id === selectedRoute.id
-            ? { ...route, status: newStatus }
-            : route
-        )
+      const routeIdentifier = route.id || route.routeId;
+
+      // Check if user has already booked this route
+      const alreadyBooked = userBookedRoutes.some(
+        (booking) =>
+          booking.routeId === routeIdentifier &&
+          booking.userEmail === user.email
       );
 
+      if (alreadyBooked) {
+        setSnackbar({
+          open: true,
+          message: "You have already booked this route",
+          severity: "warning",
+        });
+        return;
+      }
+
+      // Don't allow booking if route is not active/approved/cancelled
+      if (!["active", "approved", "cancelled"].includes(route.status)) {
+        setSnackbar({
+          open: true,
+          message: "This route is not available for booking",
+          severity: "error",
+        });
+        return;
+      }
+
+      const bookingData = {
+        routeId: routeIdentifier,
+        routeName: route.name,
+        origin: route.origin,
+        destination: route.destination,
+        pickupTime: route.pickupTime,
+        dropoffTime: route.dropoffTime,
+        bookedAt: new Date(),
+        status: "pending",
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName || "User",
+      };
+
+      // 1. Add to bookings collection
+      const bookingRef = await addDoc(collection(db, "bookings"), bookingData);
+
+      // 2. Update user document in both collections
+      const updateUserBooking = async (collectionName) => {
+        const usersQuery = query(
+          collection(db, collectionName),
+          where("userData.email", "==", user.email)
+        );
+        const querySnapshot = await getDocs(usersQuery);
+
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0];
+          await updateDoc(doc(db, collectionName, userDoc.id), {
+            bookings: arrayUnion({
+              bookingId: bookingRef.id,
+              ...bookingData,
+            }),
+            updatedAt: new Date(),
+          });
+          return true;
+        }
+        return false;
+      };
+
+      // Try updating in both collections
+      const updatedInGoogle = await updateUserBooking("google");
+      const updatedInEmail = !updatedInGoogle
+        ? await updateUserBooking("email")
+        : false;
+
+      // Update local state to reflect the new booking
+      setUserBookedRoutes([
+        ...userBookedRoutes,
+        {
+          routeId: routeIdentifier,
+          userEmail: user.email,
+        },
+      ]);
+
       setSnackbar({
         open: true,
-        message: `Route ${
-          newStatus === "active" ? "activated" : "deactivated"
-        } successfully`,
+        message: `Ride booked successfully for ${route.name}`,
         severity: "success",
       });
     } catch (error) {
-      console.error("Error updating route status:", error);
+      console.error("Error booking ride:", error);
       setSnackbar({
         open: true,
-        message: "Failed to update route status",
+        message: `Failed to book ride: ${error.message}`,
         severity: "error",
       });
     }
-    setStatusDialogOpen(false);
   };
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return "N/A";
-    const date = timestamp.toDate();
-    return date.toLocaleString();
+  const formatDateTime = (date) => {
+    if (!date) return "N/A";
+    return date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
-  const formatCoordinates = (coords) => {
-    if (!coords) return "N/A";
-    return `${coords.latitude?.toFixed(6)}, ${coords.longitude?.toFixed(6)}`;
+  const formatTime = (date) => {
+    if (!date) return "N/A";
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const handleCloseSnackbar = () => {
@@ -176,9 +269,35 @@ const ViewRoutes = () => {
       transition={{ duration: 0.3 }}
     >
       <Box sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
-          Route Management
-        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 3,
+          }}
+        >
+          <Typography variant="h4" component="h1" gutterBottom>
+            Available Routes
+          </Typography>
+          <Tooltip title="Refresh routes">
+            
+            <IconButton
+              onClick={handleRefresh}
+              color="primary"
+              disabled={refreshing}
+            >
+              <FontAwesomeIcon icon={faSyncAlt} spin={refreshing} />
+              <Button
+                onClick={handleRefresh}
+                color="primary"
+                disabled={refreshing}
+              >
+                Refresh
+              </Button>
+            </IconButton>
+          </Tooltip>
+        </Box>
 
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -192,35 +311,75 @@ const ViewRoutes = () => {
                   <TableCell>Route Name</TableCell>
                   <TableCell>Origin</TableCell>
                   <TableCell>Destination</TableCell>
+                  <TableCell>Schedule</TableCell>
                   <TableCell>Created At</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {routes.map((route) => (
+                {availableRoutes.map((route) => (
                   <TableRow
-                    key={route.id}
+                    key={route.id || route.routeId}
                     sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                   >
                     <TableCell>{route.name}</TableCell>
                     <TableCell>{route.origin}</TableCell>
                     <TableCell>{route.destination}</TableCell>
-                    <TableCell>{formatDate(route.createdAt)}</TableCell>
+                    <TableCell>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <FontAwesomeIcon icon={faClock} />
+                        <Typography variant="body2">
+                          {formatTime(route.pickupTime)}
+                        </Typography>
+                        <FontAwesomeIcon icon={faArrowRight} />
+                        <Typography variant="body2">
+                          {formatTime(route.dropoffTime)}
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDateTime(route.pickupTime)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{formatDateTime(route.createdAt)}</TableCell>
                     <TableCell>
                       <Chip
-                        label={route.status || "active"}
-                        color={route.status === "active" ? "success" : "error"}
+                        label={route.status}
+                        color={
+                          route.status === "active"
+                            ? "success"
+                            : route.status === "approved"
+                            ? "primary"
+                            : route.status === "cancelled"
+                            ? "warning"
+                            : "error"
+                        }
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
-                      <IconButton
-                        aria-label="actions"
-                        onClick={(e) => handleMenuOpen(e, route)}
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        onClick={() => handleBookRide(route)}
+                        startIcon={<FontAwesomeIcon icon={faCar} />}
+                        disabled={
+                          !["active", "approved", "cancelled"].includes(
+                            route.status
+                          ) ||
+                          userBookedRoutes.some(
+                            (booking) =>
+                              (booking.routeId === route.id ||
+                                booking.routeId === route.routeId) &&
+                              booking.userEmail === getAuth().currentUser?.email
+                          )
+                        }
                       >
-                        <FontAwesomeIcon icon={faEllipsisVertical} />
-                      </IconButton>
+                        Book Ride
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -229,87 +388,7 @@ const ViewRoutes = () => {
           </TableContainer>
         )}
 
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleMenuClose}
-        >
-          <MenuItem onClick={handleStatusClick}>
-            <ListItemIcon>
-              <FontAwesomeIcon
-                icon={
-                  selectedRoute?.status === "active" ? faBan : faCircleCheck
-                }
-                fontSize="small"
-              />
-            </ListItemIcon>
-            <ListItemText>
-              {selectedRoute?.status === "active" ? "Deactivate" : "Activate"}
-            </ListItemText>
-          </MenuItem>
-          <MenuItem onClick={handleDeleteClick}>
-            <ListItemIcon>
-              <FontAwesomeIcon icon={faTrash} fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Delete</ListItemText>
-          </MenuItem>
-        </Menu>
-
-        <Dialog
-          open={deleteDialogOpen}
-          onClose={() => setDeleteDialogOpen(false)}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
-        >
-          <DialogTitle id="alert-dialog-title">
-            {"Confirm Route Deletion"}
-          </DialogTitle>
-          <DialogContent>
-            <DialogContentText id="alert-dialog-description">
-              Are you sure you want to permanently delete the route{" "}
-              {selectedRoute?.name || "this route"}? This action cannot be
-              undone.
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleDeleteRoute} color="error" autoFocus>
-              Delete
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog
-          open={statusDialogOpen}
-          onClose={() => setStatusDialogOpen(false)}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
-        >
-          <DialogTitle id="alert-dialog-title">
-            {selectedRoute?.status === "active"
-              ? "Confirm Route Deactivation"
-              : "Confirm Route Activation"}
-          </DialogTitle>
-          <DialogContent>
-            <DialogContentText id="alert-dialog-description">
-              {selectedRoute?.status === "active"
-                ? `Are you sure you want to deactivate the route "${
-                    selectedRoute?.name || "this route"
-                  }"?`
-                : `Are you sure you want to activate the route "${
-                    selectedRoute?.name || "this route"
-                  }"?`}
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleToggleStatus} color="primary" autoFocus>
-              {selectedRoute?.status === "active" ? "Deactivate" : "Activate"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {!loading && routes.length === 0 && (
+        {!loading && availableRoutes.length === 0 && (
           <Box
             sx={{
               display: "flex",
@@ -321,9 +400,11 @@ const ViewRoutes = () => {
               mt: 2,
             }}
           >
-            <Typography variant="body1" color="text.secondary">
-              No routes found
-            </Typography>
+            <Box component="p" sx={{ color: "text.secondary" }}>
+              {getAuth().currentUser
+                ? "No available routes or you've booked all routes"
+                : "No routes available"}
+            </Box>
           </Box>
         )}
 

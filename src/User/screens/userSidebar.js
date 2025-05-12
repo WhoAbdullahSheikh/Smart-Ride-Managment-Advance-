@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Box, Button, Typography, Divider } from "@mui/material";
-import { FaBars, FaHome, FaUser, FaRoute, FaUsers, FaCar, FaSignOutAlt } from "react-icons/fa";
+import { FaBars, FaHome, FaUser, FaRoute, FaUsers, FaCar, FaSignOutAlt, FaHistory } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
@@ -33,6 +33,11 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
       name: "Routes",
       icon: <FaRoute />,
       path: "/userdashboard/viewroutes"
+    },
+    {
+      name: "Booking History",
+      icon: <FaHistory />,
+      path: "/userdashboard/bookinghistory"
     },
 
   ];

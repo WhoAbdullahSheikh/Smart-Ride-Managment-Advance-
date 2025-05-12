@@ -15,6 +15,7 @@ import ManageRoutes from "./libs/screens/ManageRoutes"
 import UserDashboard from "./user/screens/UserDashboard";
 import UserProfile from "./user/screens/UserProfile";
 import ViewRoutes from "./user/screens/ViewRoutes";
+import BookingHistory from "./user/screens/BookingHistory";
 
 import { AnimatePresence } from "framer-motion";
 const App = () => {
@@ -39,6 +40,7 @@ const App = () => {
             <Route index element={<UserDashboard />} />
             <Route path="userprofile" element={<UserProfile />} />
             <Route path="viewroutes" element={<ViewRoutes />} />
+            <Route path="bookinghistory" element={<BookingHistory />} />
           </Route>
         </Routes>
       </AnimatePresence>

@@ -101,7 +101,7 @@ const SignUp = () => {
   
       await sendEmailVerification(user);
   
-      const userRef = doc(db, "admin", user.uid);
+      const userRef = doc(db, "email", user.uid);
   
       await setDoc(userRef, {
         userData: {

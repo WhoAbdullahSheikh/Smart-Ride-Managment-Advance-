@@ -13,12 +13,14 @@ import {
   DialogContentText,
   DialogActions,
   Chip,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import { motion } from "framer-motion";
 import { FaPlus, FaSave } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { LoadScript, GoogleMap, Marker } from "@react-google-maps/api";
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { TrafficLayer } from "@react-google-maps/api";
 
@@ -31,14 +33,21 @@ const mapContainerStyle = {
 const libraries = ["places"];
 
 const CreateRoutes = () => {
+  const { routeId } = useParams();
   const navigate = useNavigate();
   const [mapLoaded, setMapLoaded] = useState(false);
   const [routeForm, setRouteForm] = useState({
+    id: "",
+    routeId: "",
     name: "",
     origin: "",
     destination: "",
     waypoints: [],
     status: "active",
+    pickupTime: new Date(Date.now() + 3600000).toISOString().slice(0, 16), // Default to 1 hour from now
+    dropoffTime: new Date(Date.now() + 7200000).toISOString().slice(0, 16), // Default to 2 hours from now
+    recurring: false,
+    recurrencePattern: "",
   });
   const [originPosition, setOriginPosition] = useState(null);
   const [destinationPosition, setDestinationPosition] = useState(null);
@@ -51,10 +60,16 @@ const CreateRoutes = () => {
   });
   const [activeMarker, setActiveMarker] = useState("origin");
   const [showInstructions, setShowInstructions] = useState(false);
-  const [editingRoute, setEditingRoute] = useState(false);
   const [showMapLoadMessage, setShowMapLoadMessage] = useState(true);
+  const [editingRoute, setEditingRoute] = useState(false);
+
 
   useEffect(() => {
+    if (routeId) {
+      loadRouteForEditing(routeId);
+      setEditingRoute(true);
+    }
+
     setShowMapLoadMessage(true);
 
     if (!navigator.geolocation) {
@@ -96,22 +111,7 @@ const CreateRoutes = () => {
       setShowInstructions(true);
       localStorage.setItem("routeInstructionsShown", "true");
     }
-  }, []);
-
-  const handleMapClick = (e) => {
-    const newPosition = {
-      lat: e.latLng.lat(),
-      lng: e.latLng.lng(),
-    };
-
-    if (activeMarker === "origin") {
-      setOriginPosition(newPosition);
-      updateAddressFromCoordinates(newPosition, "origin");
-    } else {
-      setDestinationPosition(newPosition);
-      updateAddressFromCoordinates(newPosition, "destination");
-    }
-  };
+  }, [routeId]);
 
   const updateAddressFromCoordinates = async (position, field) => {
     try {
@@ -138,6 +138,70 @@ const CreateRoutes = () => {
         message: "Failed to get address for this location",
         severity: "error",
       });
+    }
+  };
+
+  const loadRouteForEditing = async (routeId) => {
+    try {
+      const docRef = doc(db, "routes", routeId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setRouteForm({
+          id: docSnap.id,
+          routeId: docSnap.id,
+          name: data.name,
+          origin: data.origin,
+          destination: data.destination,
+          waypoints: data.waypoints || [],
+          status: data.status || "active",
+          pickupTime: data.pickupTime
+            ? data.pickupTime.toDate()
+            : new Date(Date.now() + 3600000),
+          dropoffTime: data.dropoffTime
+            ? data.dropoffTime.toDate()
+            : new Date(Date.now() + 7200000),
+          recurring: data.recurring || false,
+          recurrencePattern: data.recurrencePattern || "",
+        });
+
+        if (data.originCoordinates) {
+          setOriginPosition({
+            lat: data.originCoordinates.latitude,
+            lng: data.originCoordinates.longitude,
+          });
+        }
+
+        if (data.destinationCoordinates) {
+          setDestinationPosition({
+            lat: data.destinationCoordinates.latitude,
+            lng: data.destinationCoordinates.longitude,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error loading route for editing:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to load route for editing",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleMapClick = (e) => {
+    const newPosition = {
+      lat: e.latLng.lat(),
+      lng: e.latLng.lng(),
+    };
+
+    if (activeMarker === "origin") {
+      setOriginPosition(newPosition);
+      updateAddressFromCoordinates(newPosition, "origin");
+    } else {
+      setDestinationPosition(newPosition);
+      updateAddressFromCoordinates(newPosition, "destination");
     }
   };
 
@@ -193,12 +257,71 @@ const CreateRoutes = () => {
     }));
   };
 
+  const handleWaypointsChange = (e) => {
+    const waypoints = e.target.value
+      .split("\n")
+      .map((wp) => wp.trim())
+      .filter((wp) => wp !== "");
+    setRouteForm((prev) => ({
+      ...prev,
+      waypoints,
+    }));
+  };
+
+  const handlePickupTimeChange = (e) => {
+    const newValue = e.target.value;
+    setRouteForm((prev) => ({ ...prev, pickupTime: newValue }));
+
+    // Auto-adjust dropoff time if it's now before pickup
+    if (newValue >= routeForm.dropoffTime) {
+      const pickupDate = new Date(newValue);
+      const newDropoff = new Date(pickupDate.getTime() + 3600000); // Add 1 hour
+      setRouteForm((prev) => ({
+        ...prev,
+        dropoffTime: newDropoff.toISOString().slice(0, 16),
+      }));
+    }
+  };
+
+  const handleDropoffTimeChange = (e) => {
+    setRouteForm((prev) => ({ ...prev, dropoffTime: e.target.value }));
+  };
+
+  const handleRecurringChange = (e) => {
+    setRouteForm((prev) => ({ ...prev, recurring: e.target.checked }));
+  };
+
+  const handleRecurrencePatternChange = (e) => {
+    setRouteForm((prev) => ({ ...prev, recurrencePattern: e.target.value }));
+  };
+
   const handleSubmit = async () => {
     try {
       if (!routeForm.name || !routeForm.origin || !routeForm.destination) {
         setSnackbar({
           open: true,
           message: "Please fill all required fields",
+          severity: "warning",
+        });
+        return;
+      }
+
+      if (!routeForm.pickupTime || !routeForm.dropoffTime) {
+        setSnackbar({
+          open: true,
+          message: "Please set both pickup and drop-off times",
+          severity: "warning",
+        });
+        return;
+      }
+
+      const pickupDate = new Date(routeForm.pickupTime);
+      const dropoffDate = new Date(routeForm.dropoffTime);
+
+      if (pickupDate >= dropoffDate) {
+        setSnackbar({
+          open: true,
+          message: "Drop-off time must be after pickup time",
           severity: "warning",
         });
         return;
@@ -212,6 +335,12 @@ const CreateRoutes = () => {
         destination: routeForm.destination,
         waypoints: routeForm.waypoints,
         status: routeForm.status,
+        pickupTime: pickupDate,
+        dropoffTime: dropoffDate,
+        recurring: routeForm.recurring,
+        recurrencePattern: routeForm.recurring
+          ? routeForm.recurrencePattern
+          : "",
         originCoordinates: {
           latitude: originPosition?.lat || null,
           longitude: originPosition?.lng || null,
@@ -224,6 +353,7 @@ const CreateRoutes = () => {
       };
 
       if (editingRoute) {
+        routeData.routeId = routeForm.id;
         await updateDoc(doc(db, "routes", routeForm.id), routeData);
         setSnackbar({
           open: true,
@@ -232,17 +362,20 @@ const CreateRoutes = () => {
         });
       } else {
         routeData.createdAt = new Date();
-        await addDoc(collection(db, "routes"), routeData);
+        const docRef = await addDoc(collection(db, "routes"), routeData);
+        await updateDoc(docRef, {
+          routeId: docRef.id,
+        });
         setSnackbar({
           open: true,
-          message: "Route added successfully",
+          message: `Route created with ID: ${docRef.id}`,
           severity: "success",
         });
       }
 
       navigate("/dashboard/createroutes");
     } catch (error) {
-      console.error("Error saving route: ", error);
+      console.error("Error saving route:", error);
       setSnackbar({
         open: true,
         message: "Failed to save route",
@@ -264,7 +397,6 @@ const CreateRoutes = () => {
       transition={{ duration: 0.3 }}
     >
       <Box>
-        {}
         <Snackbar
           open={showMapLoadMessage}
           autoHideDuration={16000}
@@ -277,13 +409,13 @@ const CreateRoutes = () => {
             },
           }}
         >
-          <Alert 
-            onClose={() => setShowMapLoadMessage(false)} 
+          <Alert
+            onClose={() => setShowMapLoadMessage(false)}
             severity="info"
-            sx={{ width: '100%' }}
+            sx={{ width: "100%" }}
             action={
-              <Button 
-                color="inherit" 
+              <Button
+                color="inherit"
                 size="small"
                 onClick={() => window.location.reload()}
               >
@@ -295,7 +427,6 @@ const CreateRoutes = () => {
           </Alert>
         </Snackbar>
 
-        {/* Error messages */}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={6000}
@@ -314,10 +445,9 @@ const CreateRoutes = () => {
         </Snackbar>
 
         <Typography variant="h4" sx={{ mb: 3 }}>
-          Add New Route
+          {editingRoute ? "Edit Route" : "Add New Route"}
         </Typography>
 
-        {/* Instructions Dialog */}
         <Dialog
           open={showInstructions}
           onClose={() => setShowInstructions(false)}
@@ -339,10 +469,14 @@ const CreateRoutes = () => {
                 2. <strong>Drag the markers</strong> to adjust their position
               </Box>
               <Box sx={{ mb: 2 }}>
-                3. <strong>Type addresses</strong> in the fields to search locations
+                3. <strong>Type addresses</strong> in the fields to search
+                locations
               </Box>
               <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-                <Chip label="Origin" sx={{ backgroundColor: "#ffebee", mr: 1 }} />
+                <Chip
+                  label="Origin"
+                  sx={{ backgroundColor: "#ffebee", mr: 1 }}
+                />
                 <Box
                   sx={{
                     width: 20,
@@ -355,7 +489,10 @@ const CreateRoutes = () => {
                 <Typography>Red marker is for origin</Typography>
               </Box>
               <Box sx={{ display: "flex", alignItems: "center" }}>
-                <Chip label="Destination" sx={{ backgroundColor: "#e3f2fd", mr: 1 }} />
+                <Chip
+                  label="Destination"
+                  sx={{ backgroundColor: "#e3f2fd", mr: 1 }}
+                />
                 <Box
                   sx={{
                     width: 20,
@@ -376,7 +513,6 @@ const CreateRoutes = () => {
           </DialogActions>
         </Dialog>
 
-        {/* Marker Legend */}
         <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center" }}>
             <Box
@@ -423,6 +559,64 @@ const CreateRoutes = () => {
           required
         />
 
+        <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+          <TextField
+            label="Pickup Time"
+            type="datetime-local"
+            fullWidth
+            value={routeForm.pickupTime}
+            onChange={handlePickupTimeChange}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            inputProps={{
+              min: new Date().toISOString().slice(0, 16),
+            }}
+          />
+
+          <TextField
+            label="Drop-off Time"
+            type="datetime-local"
+            fullWidth
+            value={routeForm.dropoffTime}
+            onChange={handleDropoffTimeChange}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            inputProps={{
+              min:
+                routeForm.pickupTime || new Date().toISOString().slice(0, 16),
+            }}
+          />
+        </Box>
+
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={routeForm.recurring}
+              onChange={handleRecurringChange}
+              color="primary"
+            />
+          }
+          label="This is a recurring route"
+          sx={{ mb: 2 }}
+        />
+
+        {routeForm.recurring && (
+          <TextField
+            margin="dense"
+            name="recurrencePattern"
+            label="Recurrence Pattern"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={routeForm.recurrencePattern}
+            onChange={handleRecurrencePatternChange}
+            sx={{ mb: 2 }}
+            placeholder="e.g., 'Every Monday, Wednesday, Friday'"
+          />
+        )}
+
         <TextField
           margin="dense"
           name="origin"
@@ -437,20 +631,7 @@ const CreateRoutes = () => {
           required
         />
 
-        <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-          <TextField
-            label="Origin Latitude"
-            value={originPosition ? originPosition.lat.toFixed(6) : ""}
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-          <TextField
-            label="Origin Longitude"
-            value={originPosition ? originPosition.lng.toFixed(6) : ""}
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-        </Box>
+       
 
         <TextField
           margin="dense"
@@ -466,24 +647,7 @@ const CreateRoutes = () => {
           required
         />
 
-        <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-          <TextField
-            label="Destination Latitude"
-            value={
-              destinationPosition ? destinationPosition.lat.toFixed(6) : ""
-            }
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-          <TextField
-            label="Destination Longitude"
-            value={
-              destinationPosition ? destinationPosition.lng.toFixed(6) : ""
-            }
-            InputProps={{ readOnly: true }}
-            fullWidth
-          />
-        </Box>
+        
 
         {locationLoading ? (
           <Box
@@ -573,16 +737,7 @@ const CreateRoutes = () => {
           rows={4}
           placeholder="Address 1\nAddress 2\n..."
           value={routeForm.waypoints.join("\n")}
-          onChange={(e) => {
-            const waypoints = e.target.value
-              .split("\n")
-              .map((wp) => wp.trim())
-              .filter((wp) => wp !== "");
-            setRouteForm((prev) => ({
-              ...prev,
-              waypoints,
-            }));
-          }}
+          onChange={handleWaypointsChange}
         />
 
         <Box
@@ -608,11 +763,13 @@ const CreateRoutes = () => {
               !routeForm.name ||
               !routeForm.origin ||
               !routeForm.destination ||
-              !originPosition
+              !originPosition ||
+              !routeForm.pickupTime ||
+              !routeForm.dropoffTime
             }
             startIcon={loading ? <CircularProgress size={20} /> : <FaSave />}
           >
-            Save Route
+            {editingRoute ? "Update Route" : "Save Route"}
           </Button>
         </Box>
       </Box>

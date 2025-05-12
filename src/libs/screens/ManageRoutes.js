@@ -40,6 +40,7 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  addDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { motion } from "framer-motion";
@@ -101,12 +102,42 @@ const ManageRoutes = () => {
   useEffect(() => {
     fetchRoutes();
   }, []);
+  const generateRouteId = () => {
+    const timestamp = Date.now().toString(36);
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    return `route_${timestamp}_${randomStr}`;
+  };
+  const handleCreateRoute = async (routeData) => {
+    try {
+      const routeId = generateRouteId();
+      const routeWithId = {
+        ...routeData,
+        routeId, // Add the generated unique ID
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
+      await addDoc(collection(db, "routes"), routeWithId);
+      setSnackbar({
+        open: true,
+        message: "Route created successfully",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error creating route:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to create route",
+        severity: "error",
+      });
+    }
+  };
   const fetchRoutes = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "routes"));
       const routesData = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
+        id: doc.id, // Firestore document ID
+        routeId: doc.data().routeId || doc.id, // Use custom ID or fallback to doc ID
         ...doc.data(),
       }));
       setRoutes(routesData);
@@ -165,9 +196,7 @@ const ManageRoutes = () => {
         route.destination.toLowerCase().includes(searchLower) ||
         route.status.toLowerCase().includes(searchLower) ||
         (route.waypoints &&
-          route.waypoints.some((wp) =>
-            wp.toLowerCase().includes(searchLower)
-          ))
+          route.waypoints.some((wp) => wp.toLowerCase().includes(searchLower)))
       );
     });
   }, [sortedRoutes, searchTerm]);
@@ -354,11 +383,8 @@ const ManageRoutes = () => {
       }
 
       const routeData = {
-        name: editForm.name,
-        origin: editForm.origin,
-        destination: editForm.destination,
-        waypoints: editForm.waypoints,
-        status: editForm.status,
+        ...editForm, // Include all form fields
+        routeId: selectedRoute.routeId || generateRouteId(), // Use existing or generate new
         originCoordinates: {
           latitude: originPosition?.lat || null,
           longitude: originPosition?.lng || null,
@@ -430,7 +456,7 @@ const ManageRoutes = () => {
         </Box>
 
         {}
-        <Box sx={{ display: "flex", gap: 2, mb: 3,  }}>
+        <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
           <TextField
             fullWidth
             variant="outlined"
@@ -444,9 +470,9 @@ const ManageRoutes = () => {
                 </InputAdornment>
               ),
             }}
-            sx={{ flex: 1}}
+            sx={{ flex: 1 }}
           />
-          
+
           <ToggleButtonGroup
             value={sortOption}
             exclusive
@@ -473,11 +499,16 @@ const ManageRoutes = () => {
             <Table sx={{ minWidth: 650 }} aria-label="routes table">
               <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
                 <TableRow>
-                  <TableCell>#</TableCell>
+                  <TableCell>Sr No.</TableCell>
+                  <TableCell>Route ID</TableCell>
                   <TableCell>
                     <TableSortLabel
                       active={sortConfig.key === "name"}
-                      direction={sortConfig.key === "name" ? sortConfig.direction : "desc"}
+                      direction={
+                        sortConfig.key === "name"
+                          ? sortConfig.direction
+                          : "desc"
+                      }
                       onClick={() => handleSort("name")}
                       IconComponent={() => <FontAwesomeIcon icon={faSort} />}
                     >
@@ -490,7 +521,11 @@ const ManageRoutes = () => {
                   <TableCell>
                     <TableSortLabel
                       active={sortConfig.key === "status"}
-                      direction={sortConfig.key === "status" ? sortConfig.direction : "desc"}
+                      direction={
+                        sortConfig.key === "status"
+                          ? sortConfig.direction
+                          : "desc"
+                      }
                       onClick={() => handleSort("status")}
                       IconComponent={() => <FontAwesomeIcon icon={faSort} />}
                     >
@@ -500,7 +535,11 @@ const ManageRoutes = () => {
                   <TableCell>
                     <TableSortLabel
                       active={sortConfig.key === "createdAt"}
-                      direction={sortConfig.key === "createdAt" ? sortConfig.direction : "desc"}
+                      direction={
+                        sortConfig.key === "createdAt"
+                          ? sortConfig.direction
+                          : "desc"
+                      }
                       onClick={() => handleSort("createdAt")}
                       IconComponent={() => <FontAwesomeIcon icon={faSort} />}
                     >
@@ -517,6 +556,11 @@ const ManageRoutes = () => {
                     sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                   >
                     <TableCell>{index + 1}</TableCell>
+                    <TableCell>
+                      <Typography fontWeight="medium">
+                        {route.routeId}
+                      </Typography>
+                    </TableCell>
                     <TableCell>
                       <Typography fontWeight="medium">{route.name}</Typography>
                     </TableCell>
@@ -588,7 +632,6 @@ const ManageRoutes = () => {
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
-         
           <MenuItem onClick={handleEditClick}>
             <ListItemIcon>
               <FontAwesomeIcon icon={faEdit} fontSize="small" />
@@ -790,7 +833,9 @@ const ManageRoutes = () => {
             }}
           >
             <Typography variant="body1" color="text.secondary">
-              {searchTerm ? "No matching routes found" : "No routes found. Create your first route!"}
+              {searchTerm
+                ? "No matching routes found"
+                : "No routes found. Create your first route!"}
             </Typography>
           </Box>
         )}
