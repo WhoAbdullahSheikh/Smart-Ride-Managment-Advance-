@@ -14,14 +14,15 @@ import {
   ListItemText,
 } from "@mui/material";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit } from "@fortawesome/free-solid-svg-icons";
-import { motion, px } from "framer-motion";
+import { faEdit, faUser } from "@fortawesome/free-solid-svg-icons";
+import { motion } from "framer-motion";
 import {
   FaRoute,
   FaTruck,
   FaMapMarkerAlt,
   FaPlus,
   FaEllipsisV,
+  FaUsers,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
@@ -62,7 +63,7 @@ const Dashboard = () => {
   const fetchRoutes = useCallback(async () => {
     try {
       setLoading(true);
-      const querySnapshot = await getDocs(collection(db, "routes"));
+      const querySnapshot = await getDocs(collection(db, "routesAssigned"));
       const routesData = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -73,7 +74,7 @@ const Dashboard = () => {
       console.error("Error fetching routes: ", error);
       setSnackbar({
         open: true,
-        message: "Failed to load routes",
+        message: "Failed to load assigned routes",
         severity: "error",
       });
       setLoading(false);
@@ -93,8 +94,10 @@ const Dashboard = () => {
     setAnchorEl(null);
   };
 
-  const handleEditRoute = async () => {
-    navigate("/dashboard/manageroutes");
+  const handleEditRoute = () => {
+    if (selectedRoute) {
+      navigate(`/dashboard/rideassign`);
+    }
   };
 
   const handleAddRoute = () => {
@@ -117,7 +120,7 @@ const Dashboard = () => {
       transition={{ duration: 0.3 }}
     >
       <Box>
-        {/* Map load alert */}
+        {}
         <Snackbar
           open={showMapLoadMessage}
           autoHideDuration={6000}
@@ -157,7 +160,7 @@ const Dashboard = () => {
             fontFamily: "Raleway-Bold, sans-serif",
           }}
         >
-          Route Management <FaRoute style={{ marginLeft: "10px" }} />
+          Assigned Route Management <FaRoute style={{ marginLeft: "10px" }} />
         </Typography>
 
         <Box
@@ -174,21 +177,21 @@ const Dashboard = () => {
         >
           <StatCard
             icon={<FaRoute />}
-            title="Total Routes"
+            title="Total Assigned Routes"
             value={routes.length}
             color="#4e73df"
           />
           <StatCard
             icon={<FaTruck />}
             title="Active Routes"
-            value={routes.filter((r) => r.status === "active").length}
+            value={routes.filter((r) => r.status === "assigned").length}
             color="#1cc88a"
           />
           <StatCard
-            icon={<FaMapMarkerAlt />}
-            title="Total Waypoints"
+            icon={<FaUsers />}
+            title="Total Passengers"
             value={routes.reduce(
-              (acc, route) => acc + (route.waypoints?.length || 0),
+              (acc, route) => acc + (route.passengers?.length || 0),
               0
             )}
             color="#f6c23e"
@@ -273,7 +276,7 @@ const Dashboard = () => {
                 variant="h6"
                 sx={{ fontFamily: "Raleway, sans-serif" }}
               >
-                Saved Routes
+                Assigned Routes
               </Typography>
               {loading && <CircularProgress size={24} />}
             </Box>
@@ -281,7 +284,7 @@ const Dashboard = () => {
             {routes.length === 0 && !loading ? (
               <Box sx={{ textAlign: "center", py: 4 }}>
                 <Typography variant="body1" color="text.secondary">
-                  No routes found. Create your first route to get started.
+                  No assigned routes found. Create and assign your first route.
                 </Typography>
                 <Button
                   variant="outlined"
@@ -334,7 +337,7 @@ const Dashboard = () => {
                           label={route.status}
                           size="small"
                           color={
-                            route.status === "active" ? "success" : "default"
+                            route.status === "assigned" ? "success" : "default"
                           }
                           variant="outlined"
                         />
@@ -342,12 +345,14 @@ const Dashboard = () => {
                       <Typography variant="body2" color="text.secondary">
                         {route.origin} → {route.destination}
                       </Typography>
-                      {route.waypoints?.length > 0 && (
+                      <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
                         <Typography variant="caption" color="text.secondary">
-                          {route.waypoints.length} waypoint
-                          {route.waypoints.length !== 1 ? "s" : ""}
+                          <strong>Driver:</strong> {route.assignedDriverName || "Not assigned"}
                         </Typography>
-                      )}
+                        <Typography variant="caption" color="text.secondary">
+                          <strong>Passengers:</strong> {route.passengers?.length || 0}
+                        </Typography>
+                      </Box>
                     </Box>
                     <Box sx={{ display: "flex", alignItems: "center" }}>
                       <IconButton
@@ -388,8 +393,8 @@ const Dashboard = () => {
                 sx={{ fontFamily: "Raleway, sans-serif" }}
               >
                 {selectedRoute
-                  ? `${selectedRoute.name} Origin`
-                  : "Route Origins"}
+                  ? `${selectedRoute.name} Route`
+                  : "Assigned Routes"}
               </Typography>
             </Box>
 
@@ -437,8 +442,11 @@ const Dashboard = () => {
                           lat: route.originCoordinates.latitude,
                           lng: route.originCoordinates.longitude,
                         }}
-                        title={`${route.name} (Origin)`}
+                        title={`${route.name} (Assigned Route)`}
                         onClick={() => setSelectedRoute(route)}
+                        icon={{
+                          url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+                        }}
                       />
                     );
                   })}
@@ -452,7 +460,7 @@ const Dashboard = () => {
                       icon={{
                         url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
                       }}
-                      title={`${selectedRoute.name} (Selected Origin)`}
+                      title={`${selectedRoute.name} (Selected Route)`}
                     />
                   )}
                 </GoogleMap>
@@ -475,7 +483,7 @@ const Dashboard = () => {
             {selectedRoute && (
               <Box sx={{ mt: 3 }}>
                 <Typography variant="h4" gutterBottom>
-                  Route Details
+                  Assigned Route Details
                 </Typography>
                 <Box
                   sx={{
@@ -487,13 +495,12 @@ const Dashboard = () => {
                   <DetailItem label="Route Name" value={selectedRoute.name} />
                   <DetailItem
                     label="Status"
-                   
                     value={
                       <Chip
                         label={selectedRoute.status}
                         size="small"
                         color={
-                          selectedRoute.status === "active"
+                          selectedRoute.status === "assigned"
                             ? "success"
                             : "default"
                         }
@@ -501,6 +508,17 @@ const Dashboard = () => {
                           marginLeft: 2,
                         }}
                       />
+                    }
+                  />
+                  <DetailItem label="Driver" value={selectedRoute.assignedDriverName || "Not assigned"} />
+                  <DetailItem label="Vehicle" value={selectedRoute.assignedVehicleInfo || "Not assigned"} />
+                  <DetailItem label="Passengers" value={selectedRoute.passengers?.length || 0} />
+                  <DetailItem
+                    label="Assigned At"
+                    value={
+                      selectedRoute.assignedAt
+                        ? new Date(selectedRoute.assignedAt.seconds * 1000).toLocaleString()
+                        : "N/A"
                     }
                   />
                   <DetailItem label="Origin" value={selectedRoute.origin} />
@@ -532,11 +550,41 @@ const Dashboard = () => {
                         : "Not available"
                     }
                   />
-                  <DetailItem
-                    label="Waypoints"
-                    value={`${selectedRoute.waypoints?.length || 0} stops`}
-                  />
                 </Box>
+
+                {selectedRoute.passengers?.length > 0 && (
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Passenger List
+                    </Typography>
+                    <Box
+                      component="ul"
+                      sx={{
+                        listStyle: "none",
+                        padding: 0,
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                        border: "1px solid #eee",
+                        borderRadius: "4px",
+                        "& li": {
+                          padding: "8px 16px",
+                          borderBottom: "1px solid #eee",
+                          "&:last-child": {
+                            borderBottom: "none",
+                          },
+                        },
+                      }}
+                    >
+                      {selectedRoute.passengers.map((passenger, index) => (
+                        <li key={index}>
+                          <Typography>
+                            {passenger.userName} ({passenger.userEmail})
+                          </Typography>
+                        </li>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </Box>
             )}
           </Box>
@@ -569,14 +617,14 @@ const Dashboard = () => {
             <ListItemIcon>
               <FaMapMarkerAlt />
             </ListItemIcon>
-            <ListItemText>View Origin</ListItemText>
+            <ListItemText>View Route</ListItemText>
           </MenuItem>
 
           <MenuItem onClick={handleEditRoute}>
             <ListItemIcon>
               <FontAwesomeIcon icon={faEdit} fontSize="small" />
             </ListItemIcon>
-            <ListItemText>Edit</ListItemText>
+            <ListItemText>Manage Assignment</ListItemText>
           </MenuItem>
         </Menu>
 

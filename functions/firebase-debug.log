@@ -1,0 +1,80 @@
+[debug] [2025-05-13T03:11:25.530Z] ----------------------------------------------------------------------
+[debug] [2025-05-13T03:11:25.532Z] Command:       /usr/local/bin/firebase /Users/apple/.cache/firebase/tools/lib/node_modules/firebase-tools/lib/bin/firebase init functions
+[debug] [2025-05-13T03:11:25.532Z] CLI Version:   12.7.0
+[debug] [2025-05-13T03:11:25.532Z] Platform:      darwin
+[debug] [2025-05-13T03:11:25.533Z] Node Version:  v16.16.0
+[debug] [2025-05-13T03:11:25.538Z] Time:          Tue May 13 2025 08:11:25 GMT+0500 (Pakistan Standard Time)
+[debug] [2025-05-13T03:11:25.538Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-05-13T03:11:25.656Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-05-13T03:11:25.659Z] > authorizing via signed-in user (abdullahmuhhamad339@gmail.com)
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  /Volumes/Mac-M2/Projects/smart-ride-system
+
+Before we get started, keep in mind:
+
+  * You are currently outside your home directory
+  * You are initializing within an existing Firebase project directory
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] but for now we'll just set up a default project.
+[info] 
+[debug] [2025-05-13T03:11:25.667Z] Using project from CLI flag: uts-db-65638
+[debug] [2025-05-13T03:11:25.669Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/uts-db-65638 [none]
+[debug] [2025-05-13T03:11:26.690Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/uts-db-65638 200
+[debug] [2025-05-13T03:11:26.697Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/uts-db-65638 {"projectId":"uts-db-65638","projectNumber":"398040249087","displayName":"UTS-DB","name":"projects/uts-db-65638","resources":{"hostingSite":"uts-db-65638"},"state":"ACTIVE","etag":"1_b60dbd2e-35ae-44a3-9fbf-2db3b9419856"}
+[info] i  Using project uts-db-65638 (UTS-DB) 
+[info] 
+=== Functions Setup
+[debug] [2025-05-13T03:11:26.720Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-05-13T03:11:26.722Z] > authorizing via signed-in user (abdullahmuhhamad339@gmail.com)
+[debug] [2025-05-13T03:11:26.723Z] [iam] checking project uts-db-65638 for permissions ["firebase.projects.get"]
+[debug] [2025-05-13T03:11:26.725Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/uts-db-65638:testIamPermissions [none]
+[debug] [2025-05-13T03:11:26.725Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/uts-db-65638:testIamPermissions x-goog-quota-user=projects/uts-db-65638
+[debug] [2025-05-13T03:11:26.725Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/uts-db-65638:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2025-05-13T03:11:28.556Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/uts-db-65638:testIamPermissions 200
+[debug] [2025-05-13T03:11:28.559Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/uts-db-65638:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2025-05-13T03:11:28.562Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com [none]
+[debug] [2025-05-13T03:11:28.565Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/uts-db-65638
+[debug] [2025-05-13T03:11:28.574Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/runtimeconfig.googleapis.com [none]
+[debug] [2025-05-13T03:11:28.576Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/runtimeconfig.googleapis.com x-goog-quota-user=projects/uts-db-65638
+[debug] [2025-05-13T03:11:30.808Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com 200
+[debug] [2025-05-13T03:11:30.811Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2025-05-13T03:11:30.813Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com:enable [none]
+[debug] [2025-05-13T03:11:30.815Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com:enable x-goog-quota-user=projects/uts-db-65638
+[debug] [2025-05-13T03:11:30.877Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/runtimeconfig.googleapis.com 200
+[debug] [2025-05-13T03:11:30.877Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/runtimeconfig.googleapis.com [omitted]
+[debug] [2025-05-13T03:11:32.967Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com:enable 200
+[debug] [2025-05-13T03:11:32.967Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com:enable [omitted]
+[debug] [2025-05-13T03:11:42.984Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com [none]
+[debug] [2025-05-13T03:11:42.995Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/uts-db-65638
+[debug] [2025-05-13T03:11:45.010Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com 200
+[debug] [2025-05-13T03:11:45.012Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/uts-db-65638/services/cloudfunctions.googleapis.com [omitted]
+[info] 
+Detected existing codebase(s): default
+
+[info] Let's create a new codebase for your functions.
+[info] A directory corresponding to the codebase will be created in your project
+[info] with sample code pre-configured.
+
+[info] See https://firebase.google.com/docs/functions/organize-functions for
+[info] more information on organizing your functions using codebases.
+
+[info] Functions can be deployed with firebase deploy.
+
+[error] Invalid codebase name. Codebase must be less than 64 characters and can contain only lowercase letters, numeric characters, underscores, and dashes.
+[error] Invalid codebase name. Codebase must be less than 64 characters and can contain only lowercase letters, numeric characters, underscores, and dashes.
+[error] Invalid codebase name. Codebase must be less than 64 characters and can contain only lowercase letters, numeric characters, underscores, and dashes.
+[error] Invalid codebase name. Codebase must be less than 64 characters and can contain only lowercase letters, numeric characters, underscores, and dashes.

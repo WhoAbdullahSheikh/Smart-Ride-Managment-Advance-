@@ -54,7 +54,17 @@ import {
   FaSignInAlt,
   FaInfoCircle,
   FaSync,
+  FaThumbsUp,
 } from "react-icons/fa";
+
+const DetailItem = ({ label, value }) => (
+  <Box sx={{ mb: 2 }}>
+    <Typography variant="caption" color="text.secondary">
+      {label}
+    </Typography>
+    <Typography variant="body2">{value}</Typography>
+  </Box>
+);
 
 const Users = () => {
   const theme = useTheme();
@@ -73,10 +83,27 @@ const Users = () => {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [viewDetailsDialogOpen, setViewDetailsDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const formatPaymentMethod = (paymentMethod) => {
+    if (!paymentMethod) return "N/A";
+
+    switch (paymentMethod) {
+      case "monthly":
+        return "Monthly";
+      case "two_installments":
+        return "2 Installments";
+      case "full_payment":
+        return "Full Payment";
+      default:
+        return paymentMethod;
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -103,6 +130,7 @@ const Users = () => {
       const combinedUsers = [...googleUsers, ...emailUsers].map((user) => ({
         id: user.id,
         collection: user.collection,
+        profileImage: user.profileImage || user.userData?.profileImage || null,
         name: user.displayName || user.userData?.displayName || "N/A",
         email: user.email || user.userData?.email || "N/A",
         photoURL: user.photoURL || user.userData?.photoURL || null,
@@ -111,9 +139,10 @@ const Users = () => {
         createdAt: user.createdAt || user.userData?.createdAt || null,
         emailVerified:
           user.emailVerified || user.userData?.emailVerified || false,
-        status: user.status || "active",
+        status: user.status || user.userData?.status || "pending",
         signUpMethod: user.signUpMethod,
         loginActivities: user.loginActivities || [],
+        userData: user.userData || {},
       }));
 
       setUsers(combinedUsers);
@@ -136,14 +165,46 @@ const Users = () => {
     fetchUsers();
   };
 
+  const handleApproveUser = async () => {
+    if (!selectedUser) return;
+
+    try {
+      await updateDoc(doc(db, selectedUser.collection, selectedUser.id), {
+        status: "approved",
+        ...(selectedUser.collection === "email" && {
+          "userData.status": "approved",
+        }),
+      });
+
+      setUsers(
+        users.map((user) =>
+          user.id === selectedUser.id ? { ...user, status: "approved" } : user
+        )
+      );
+
+      setSnackbar({
+        open: true,
+        message: "User approved successfully",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error approving user:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to approve user",
+        severity: "error",
+      });
+    }
+    setApproveDialogOpen(false);
+    setSelectedUser(null);
+  };
+
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
 
     try {
-      // First delete the user
       await deleteDoc(doc(db, selectedUser.collection, selectedUser.id));
 
-      // Then delete all messages associated with this user's uid
       const messagesRef = collection(db, "messages");
       const q = query(messagesRef, where("uid", "==", selectedUser.id));
 
@@ -152,10 +213,8 @@ const Users = () => {
         deleteDoc(doc.ref)
       );
 
-      // Wait for all deletions to complete
       await Promise.all(deletePromises);
 
-      // Update local state
       setUsers(users.filter((user) => user.id !== selectedUser.id));
       setSnackbar({
         open: true,
@@ -182,6 +241,9 @@ const Users = () => {
         selectedUser.status === "active" ? "suspended" : "active";
       await updateDoc(doc(db, selectedUser.collection, selectedUser.id), {
         status: newStatus,
+        ...(selectedUser.collection === "email" && {
+          "userData.status": newStatus,
+        }),
       });
 
       setUsers(
@@ -216,6 +278,11 @@ const Users = () => {
   const handleMenuOpen = (event, user) => {
     setAnchorEl(event.currentTarget);
     setSelectedUser(user);
+  };
+
+  const handleApproveClick = () => {
+    setApproveDialogOpen(true);
+    setAnchorEl(null);
   };
 
   const handleSuspendClick = () => {
@@ -300,7 +367,7 @@ const Users = () => {
       }
     >
       <Avatar
-        src={user.photoURL || ""}
+        src={user.profileImage || user.photoURL || ""}
         sx={{
           width: 40,
           height: 40,
@@ -317,6 +384,26 @@ const Users = () => {
     if (!loginActivities || loginActivities.length === 0) return "N/A";
     const lastLogin = loginActivities[loginActivities.length - 1].timestamp;
     return formatDate(lastLogin);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "approved":
+        return "success";
+      case "pending":
+        return "warning";
+      case "suspended":
+        return "error";
+      case "active":
+        return "success";
+      default:
+        return "default";
+    }
+  };
+
+  const getStatusText = (status) => {
+    if (isSmallScreen) return status.charAt(0).toUpperCase();
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   return (
@@ -386,6 +473,12 @@ const Users = () => {
                       Username
                     </TableCell>
                   )}
+                  <TableCell
+                    align="center"
+                    sx={{ fontWeight: "bold", fontSize: "16px" }}
+                  >
+                    Installments Plan
+                  </TableCell>
                   <TableCell
                     align="center"
                     sx={{ fontWeight: "bold", fontSize: "16px" }}
@@ -495,7 +588,17 @@ const Users = () => {
                         </Tooltip>
                       </TableCell>
                     )}
-
+                    <TableCell align="center">
+                      <Tooltip
+                        title={formatPaymentMethod(
+                          user.userData?.paymentMethod
+                        )}
+                      >
+                        <Typography noWrap>
+                          {formatPaymentMethod(user.userData?.paymentMethod)}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell align="center">
                       <Tooltip title={formatDate(user.createdAt)}>
                         <Box
@@ -534,10 +637,8 @@ const Users = () => {
 
                     <TableCell align="center">
                       <Chip
-                        label={
-                          isSmallScreen ? user.status.charAt(0) : user.status
-                        }
-                        color={user.status === "active" ? "success" : "error"}
+                        label={getStatusText(user.status)}
+                        color={getStatusColor(user.status)}
                         size={isSmallScreen ? "small" : "medium"}
                         sx={{
                           fontWeight: 600,
@@ -571,7 +672,36 @@ const Users = () => {
           transformOrigin={{ horizontal: "right", vertical: "top" }}
           anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
         >
-          <MenuItem onClick={handleSuspendClick}>
+          <MenuItem
+            onClick={() => {
+              setViewDetailsDialogOpen(true);
+              handleMenuClose();
+            }}
+          >
+            <ListItemIcon>
+              <FaInfoCircle color={theme.palette.info.main} />
+            </ListItemIcon>
+            <ListItemText>View Details</ListItemText>
+          </MenuItem>
+
+          {selectedUser?.status === "pending" && (
+            <MenuItem onClick={handleApproveClick}>
+              <ListItemIcon>
+                <FaThumbsUp color={theme.palette.success.main} />
+              </ListItemIcon>
+              <ListItemText>Approve</ListItemText>
+            </MenuItem>
+          )}
+          <MenuItem
+            onClick={
+              selectedUser?.status === "active"
+                ? handleSuspendClick
+                : selectedUser?.status === "suspended"
+                ? handleSuspendClick
+                : null
+            }
+            disabled={selectedUser?.status === "pending"}
+          >
             <ListItemIcon>
               {selectedUser?.status === "active" ? (
                 <FaBan color={theme.palette.error.main} />
@@ -580,7 +710,11 @@ const Users = () => {
               )}
             </ListItemIcon>
             <ListItemText>
-              {selectedUser?.status === "active" ? "Suspend" : "Activate"}
+              {selectedUser?.status === "active"
+                ? "Suspend"
+                : selectedUser?.status === "suspended"
+                ? "Activate"
+                : "Pending Approval"}
             </ListItemText>
           </MenuItem>
           <MenuItem onClick={handleDeleteClick}>
@@ -590,6 +724,44 @@ const Users = () => {
             <ListItemText>Delete</ListItemText>
           </MenuItem>
         </Menu>
+
+        <Dialog
+          open={approveDialogOpen}
+          onClose={() => setApproveDialogOpen(false)}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">
+            <Box display="flex" alignItems="center" gap={1}>
+              <FaThumbsUp color={theme.palette.success.main} />
+              Confirm User Approval
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText id="alert-dialog-description">
+              Are you sure you want to approve{" "}
+              <strong>{selectedUser?.name || "this user"}</strong>? This will
+              grant them full access to the system.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setApproveDialogOpen(false)}
+              variant="outlined"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApproveUser}
+              color="success"
+              variant="contained"
+              autoFocus
+              startIcon={<FaThumbsUp />}
+            >
+              Approve
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog
           open={deleteDialogOpen}
@@ -679,7 +851,175 @@ const Users = () => {
             </Button>
           </DialogActions>
         </Dialog>
+        <Dialog
+          open={viewDetailsDialogOpen}
+          onClose={() => setViewDetailsDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Box display="flex" alignItems="center" gap={1}>
+              <FaUser />
+              User Details: {selectedUser?.name}
+            </Box>
+          </DialogTitle>
+          <DialogContent dividers>
+            {selectedUser && (
+              <Box>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 3, mb: 3 }}
+                >
+                  <Avatar
+                    src={selectedUser.photoURL || ""}
+                    sx={{ width: 80, height: 80 }}
+                  >
+                    {selectedUser.name?.charAt(0) || <FaUser size={32} />}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6">{selectedUser.name}</Typography>
+                    <Typography color="text.secondary">
+                      {selectedUser.email}
+                    </Typography>
+                    <Chip
+                      label={selectedUser.status}
+                      color={getStatusColor(selectedUser.status)}
+                      sx={{ mt: 1 }}
+                    />
+                  </Box>
+                </Box>
 
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 3,
+                  }}
+                >
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Basic Information
+                    </Typography>
+                    <Box sx={{ mt: 2 }}>
+                      <DetailItem
+                        label="Username"
+                        value={selectedUser.username}
+                      />
+                      <DetailItem
+                        label="Sign Up Method"
+                        value={selectedUser.signUpMethod}
+                      />
+                      <DetailItem
+                        label="Email Verified"
+                        value={selectedUser.emailVerified ? "Yes" : "No"}
+                      />
+                      <DetailItem
+                        label="Account Created"
+                        value={formatDate(selectedUser.createdAt)}
+                      />
+                      <DetailItem
+                        label="Last Login"
+                        value={getLastLogin(selectedUser.loginActivities)}
+                      />
+                    </Box>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Profile Details
+                    </Typography>
+                    <Box sx={{ mt: 2 }}>
+                      <DetailItem
+                        label="Father's Name"
+                        value={selectedUser.userData?.fatherName || "N/A"}
+                      />
+                      <DetailItem
+                        label="CNIC"
+                        value={selectedUser.userData?.cnic || "N/A"}
+                      />
+                      <DetailItem
+                        label="Date of Birth"
+                        value={selectedUser.userData?.dob || "N/A"}
+                      />
+                      <DetailItem
+                        label="Phone Number"
+                        value={selectedUser.userData?.phone || "N/A"}
+                      />
+                      <DetailItem
+                        label="User Type"
+                        value={selectedUser.userData?.userType || "N/A"}
+                      />
+                      <DetailItem
+                        label="Payment Method"
+                        value={
+                          selectedUser.userData?.paymentMethod
+                            ? selectedUser.userData.paymentMethod === "monthly"
+                              ? "Monthly (Rs 9,500 x 4 = 38,000)"
+                              : selectedUser.userData.paymentMethod ===
+                                "two_installments"
+                              ? "2 Installments (Rs 9,000 x 4 = 36,000)"
+                              : "Full Payment (Rs 8,500 x 4 = 34,000)"
+                            : "N/A"
+                        }
+                      />
+                    </Box>
+                  </Box>
+                </Box>
+
+                {selectedUser.loginActivities &&
+                  selectedUser.loginActivities.length > 0 && (
+                    <Box sx={{ mt: 3 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Login Activity
+                      </Typography>
+                      <TableContainer component={Paper} sx={{ mt: 2 }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Date/Time</TableCell>
+                              <TableCell>IP Address</TableCell>
+                              <TableCell>Device</TableCell>
+                              <TableCell>Browser</TableCell>
+                              <TableCell>OS</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {selectedUser.loginActivities
+                              .slice()
+                              .reverse()
+                              .map((activity, index) => (
+                                <TableRow key={index}>
+                                  <TableCell>
+                                    {formatDate(activity.timestamp)}
+                                  </TableCell>
+                                  <TableCell>{activity.ip || "N/A"}</TableCell>
+                                  <TableCell>
+                                    {activity.device?.type || "N/A"}
+                                    {activity.device?.model
+                                      ? ` (${activity.device.model})`
+                                      : ""}
+                                  </TableCell>
+                                  <TableCell>
+                                    {activity.device?.browser || "N/A"}
+                                  </TableCell>
+                                  <TableCell>
+                                    {activity.device?.os || "N/A"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  )}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setViewDetailsDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
         {!loading && users.length === 0 && (
           <Box
             sx={{

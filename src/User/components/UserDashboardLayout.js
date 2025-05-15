@@ -23,6 +23,8 @@ const UserDashboardLayout = () => {
       "/userdashboard/userprofile": "Profile",
       "/userdashboard/viewroutes": "Routes",
       "/userdashboard/bookinghistory": "Booking History",
+      "/userdashboard/payment": "Payment",
+      "/userdashboard/feedbackandcomplaints": "Feedback and Complaints",
     };
 
     const currentButton =

@@ -85,18 +85,17 @@ const BookingHistory = () => {
   }, [navigate]);
 
   useEffect(() => {
-    // Filter bookings based on active tab
     const filterBookings = () => {
       switch (activeTab) {
-        case 0: // Pending
+        case 0:
           return bookings.filter(
             (booking) => booking.status?.toLowerCase() === "pending"
           );
-        case 1: // Approved
+        case 1:
           return bookings.filter(
             (booking) => booking.status?.toLowerCase() === "confirmed"
           );
-        case 2: // Rejected
+        case 2:
           return bookings.filter(
             (booking) => booking.status?.toLowerCase() === "rejected"
           );
@@ -123,7 +122,6 @@ const BookingHistory = () => {
         return;
       }
 
-      // Fetch bookings from the bookings collection where userEmail matches
       const bookingsQuery = query(
         collection(db, "bookings"),
         where("userEmail", "==", user.email)
@@ -135,7 +133,6 @@ const BookingHistory = () => {
         ...doc.data(),
       }));
 
-      // Sort by booking date (newest first)
       bookingsData.sort((a, b) => {
         const dateA = a.bookedAt?.seconds || 0;
         const dateB = b.bookedAt?.seconds || 0;
@@ -188,7 +185,6 @@ const BookingHistory = () => {
 
       setLoading(true);
 
-      // Delete the booking document
       await deleteDoc(doc(db, "bookings", bookingId));
 
       setSnackbar({
@@ -197,7 +193,6 @@ const BookingHistory = () => {
         severity: "success",
       });
 
-      // Refresh the bookings list
       await fetchBookings();
     } catch (error) {
       console.error("Error cancelling booking:", error);

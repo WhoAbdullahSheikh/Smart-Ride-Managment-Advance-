@@ -37,6 +37,7 @@ import {
   faCircleCheck 
 } from '@fortawesome/free-solid-svg-icons';
 
+
 const Drivers = () => {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +60,8 @@ const Drivers = () => {
       const querySnapshot = await getDocs(collection(db, "drivers"));
       const driversData = querySnapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data(),
+        ...doc.data().userData,
+        firebaseId: doc.id
       }));
       setDrivers(driversData);
       setLoading(false);
@@ -95,8 +97,8 @@ const Drivers = () => {
 
   const handleDeleteDriver = async () => {
     try {
-      await deleteDoc(doc(db, "drivers", selectedDriver.id));
-      setDrivers(drivers.filter((driver) => driver.id !== selectedDriver.id));
+      await deleteDoc(doc(db, "drivers", selectedDriver.firebaseId));
+      setDrivers(drivers.filter((driver) => driver.firebaseId !== selectedDriver.firebaseId));
       setSnackbar({
         open: true,
         message: "Driver deleted successfully",
@@ -115,22 +117,24 @@ const Drivers = () => {
 
   const handleToggleStatus = async () => {
     try {
-      const newStatus = selectedDriver.status === "active" ? "suspended" : "active";
-      await updateDoc(doc(db, "drivers", selectedDriver.id), {
-        status: newStatus,
+      const newStatus = selectedDriver.status === "active" ? "inactive" : "active";
+      
+      await updateDoc(doc(db, "drivers", selectedDriver.firebaseId), {
+        "userData.status": newStatus,
+        "userData.updatedAt": new Date()
       });
 
       setDrivers(
         drivers.map((driver) =>
-          driver.id === selectedDriver.id ? { ...driver, status: newStatus } : driver
+          driver.firebaseId === selectedDriver.firebaseId 
+            ? { ...driver, status: newStatus } 
+            : driver
         )
       );
 
       setSnackbar({
         open: true,
-        message: `Driver ${
-          newStatus === "active" ? "activated" : "suspended"
-        } successfully`,
+        message: `Driver ${newStatus === "active" ? "activated" : "deactivated"} successfully`,
         severity: "success",
       });
     } catch (error) {
@@ -152,6 +156,11 @@ const Drivers = () => {
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  const isBase64Image = (str) => {
+    if (typeof str !== 'string') return false;
+    return str.startsWith('data:image');
   };
 
   return (
@@ -176,47 +185,55 @@ const Drivers = () => {
                 <TableRow>
                   <TableCell>Driver</TableCell>
                   <TableCell>Email</TableCell>
-                  <TableCell>Name</TableCell>
                   <TableCell>Phone</TableCell>
-                  <TableCell>User ID</TableCell>
+                  <TableCell>License Number</TableCell>
+                  <TableCell>License Type</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Created At</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {drivers.map((driver) => (
                   <TableRow
-                    key={driver.id}
+                    key={driver.firebaseId}
                     sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                   >
                     <TableCell>
                       <Box sx={{ display: "flex", alignItems: "center" }}>
                         <Avatar
-                          sx={{ mr: 2, bgcolor: "primary.main" }}
+                          src={isBase64Image(driver.profileImage) ? driver.profileImage : undefined}
+                          sx={{ 
+                            mr: 2, 
+                            bgcolor: isBase64Image(driver.profileImage) ? 'transparent' : 'primary.main',
+                            width: 40,
+                            height: 40
+                          }}
                         >
-                          {driver.name?.charAt(0) || "D"}
+                          {!isBase64Image(driver.profileImage) && (driver.name?.charAt(0) || "D")}
                         </Avatar>
                         {driver.name}
                       </Box>
                     </TableCell>
                     <TableCell>{driver.email}</TableCell>
-                    <TableCell>{driver.name || "N/A"}</TableCell>
                     <TableCell>{driver.phone || "N/A"}</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace' }}>
-                      {driver.userId || "N/A"}
-                    </TableCell>
+                    <TableCell>{driver.licenseNumber || "N/A"}</TableCell>
+                    <TableCell>{driver.licenseType || "N/A"}</TableCell>
                     <TableCell>
                       <Chip
                         label={driver.status || "pending"}
                         color={
                           driver.status === "active" 
                             ? "success" 
-                            : driver.status === "pending"
+                            : driver.status === "on-leave"
                             ? "warning"
                             : "error"
                         }
                         size="small"
                       />
+                    </TableCell>
+                    <TableCell>
+                      {formatDate(driver.createdAt)}
                     </TableCell>
                     <TableCell>
                       <IconButton
@@ -247,7 +264,7 @@ const Drivers = () => {
               />
             </ListItemIcon>
             <ListItemText>
-              {selectedDriver?.status === "active" ? "Suspend" : "Activate"}
+              {selectedDriver?.status === "active" ? "Deactivate" : "Activate"}
             </ListItemText>
           </MenuItem>
           <MenuItem onClick={handleDeleteClick}>
@@ -258,7 +275,6 @@ const Drivers = () => {
           </MenuItem>
         </Menu>
 
-        {}
         <Dialog
           open={deleteDialogOpen}
           onClose={() => setDeleteDialogOpen(false)}
@@ -282,7 +298,6 @@ const Drivers = () => {
           </DialogActions>
         </Dialog>
 
-        {}
         <Dialog
           open={statusDialogOpen}
           onClose={() => setStatusDialogOpen(false)}
@@ -291,24 +306,24 @@ const Drivers = () => {
         >
           <DialogTitle id="alert-dialog-title">
             {selectedDriver?.status === "active"
-              ? "Confirm Driver Suspension"
+              ? "Confirm Driver Deactivation"
               : "Confirm Driver Activation"}
           </DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
               {selectedDriver?.status === "active"
-                ? `Are you sure you want to suspend ${
+                ? `Are you sure you want to deactivate ${
                     selectedDriver?.name || "this driver"
-                  }? They will lose access to their account.`
+                  }?`
                 : `Are you sure you want to activate ${
                     selectedDriver?.name || "this driver"
-                  }? They will regain access to their account.`}
+                  }?`}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleToggleStatus} color="primary" autoFocus>
-              {selectedDriver?.status === "active" ? "Suspend" : "Activate"}
+              {selectedDriver?.status === "active" ? "Deactivate" : "Activate"}
             </Button>
           </DialogActions>
         </Dialog>

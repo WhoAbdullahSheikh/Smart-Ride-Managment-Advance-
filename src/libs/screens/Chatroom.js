@@ -107,33 +107,28 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
       e.preventDefault();
       if (!newMessage.trim() || !user) return;
 
-      const isEmailUser = user.providerData.some(
-        (provider) => provider.providerId === "password"
-      );
+      let displayNameToUse = user.displayName || "Administrator";
+      let photoURLToUse = user.photoURL || "";
 
-      let displayNameToUse = user.displayName;
-      let photoURLToUse = user.photoURL;
+      try {
+        
+        const adminDocRef = doc(db, "admin", "userdata");
+        const adminDocSnap = await getDoc(adminDocRef);
 
-      if (isEmailUser) {
-        try {
-          const emailQuery = query(
-            collection(db, "email"),
-            where("userData.email", "==", user.email)
+        if (adminDocSnap.exists()) {
+          const userData = adminDocSnap.data();
+          
+          const userEntry = Object.entries(userData).find(
+            ([key, value]) => value.email === user.email
           );
-          const querySnapshot = await getDocs(emailQuery);
 
-          if (!querySnapshot.empty) {
-            const userDoc = querySnapshot.docs[0];
-            const userData = userDoc.data().userData;
-            displayNameToUse = userData.displayName || displayNameToUse;
-            photoURLToUse = userData.photoURL || photoURLToUse;
+          if (userEntry) {
+            const [, userInfo] = userEntry;
+            displayNameToUse = userInfo.displayName || displayNameToUse;
           }
-        } catch (error) {
-          console.error(
-            "Error fetching user details from email collection:",
-            error
-          );
         }
+      } catch (error) {
+        console.error("Error fetching user details from admin collection:", error);
       }
 
       const tempId = `temp-${Date.now()}`;
@@ -167,6 +162,7 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
     },
     [newMessage, user]
   );
+
   const handleDeleteMessage = useCallback(async () => {
     if (!selectedMessage) return;
 
@@ -217,18 +213,16 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
 
   const MessageItem = React.memo(({ message, isCurrentUser }) => {
     const [anchorEl, setAnchorEl] = useState(null);
-    
-    
-    const isSpecial = message.displayName === "Administrator" || !message.displayName;
-  
+    const isAnonymous = message.displayName === "Administrator" || !message.displayName;
+
     const handleMenuOpen = (event) => {
       setAnchorEl(event.currentTarget);
     };
-  
+
     const handleMenuClose = () => {
       setAnchorEl(null);
     };
-  
+
     return (
       <ListItem
         sx={{
@@ -266,7 +260,7 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
               >
                 <FaEllipsisV size={12} />
               </IconButton>
-  
+
               <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
@@ -308,20 +302,16 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
               </Menu>
             </>
           )}
-  
+
           <Avatar
             src={message.photoURL}
             sx={{
               width: 32,
               height: 32,
-              backgroundColor: isSpecial 
-                ? "#FFA500" 
-                : message.photoURL 
-                  ? "transparent" 
-                  : "#3B82F6",
+              backgroundColor: message.photoURL ? "transparent" : isAnonymous ? "#FFA500" : "#3B82F6",
             }}
           >
-            {message.displayName?.charAt(0) || "A"}
+            {message.displayName?.charAt(0)}
           </Avatar>
           <Box
             sx={{
@@ -333,16 +323,16 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
           >
             <Box
               sx={{
-                backgroundColor: isSpecial
-                  ? "rgba(255, 165, 0, 0.3)" 
+                backgroundColor: isAnonymous 
+                  ? "rgba(255, 165, 0, 0.3)"
                   : isCurrentUser
-                    ? "rgba(103, 105, 103, 0.5)" 
-                    : "rgba(255,255,255,0.1)", 
+                    ? "rgba(46, 125, 50, 0.5)"
+                    : "rgba(255,255,255,0.1)",
                 borderRadius: "12px",
                 padding: "8px 12px",
                 position: "relative",
                 maxWidth: "100%",
-                border: isSpecial ? "1px solid rgba(255, 165, 0, 0.5)" : "none",
+                border: isAnonymous ? "1px solid rgba(255, 165, 0, 0.5)" : "none",
               }}
             >
               <Typography
@@ -350,13 +340,13 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
                 sx={{
                   wordBreak: "break-word",
                   fontSize: "0.875rem",
-                  color: "white",
+                  color: isAnonymous ? "rgba(255, 255, 255, 0.9)" : "white",
                   paddingRight: "45px",
                 }}
               >
                 {message.text}
               </Typography>
-  
+
               <Box
                 sx={{
                   position: "absolute",
@@ -371,9 +361,7 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
                   variant="caption"
                   sx={{
                     fontSize: "0.60rem",
-                    color: isSpecial 
-                      ? "rgba(255, 255, 255, 0.8)" 
-                      : "rgba(255,255,255,0.6)",
+                    color: isAnonymous ? "rgba(255, 255, 255, 0.7)" : "rgba(255,255,255,0.6)",
                   }}
                 >
                   {formatTime(message.timestamp)}
@@ -384,16 +372,14 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
               sx={{
                 fontWeight: "bold",
                 fontSize: "0.75rem",
-                color: isSpecial ? "#FFA500" : "white",
+                color: isAnonymous ? "#FFA500" : "white",
                 textAlign: isCurrentUser ? "right" : "left",
               }}
             >
               <Typography
                 sx={{
                   fontSize: "0.75rem",
-                  color: isSpecial 
-                    ? "rgba(255, 165, 0, 0.7)" 
-                    : "#949494",
+                  color: isAnonymous ? "rgba(255, 165, 0, 0.7)" : "#949494",
                   textAlign: isCurrentUser ? "right" : "left",
                 }}
               >
@@ -406,6 +392,7 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
       </ListItem>
     );
   });
+
   return (
     <motion.div
       initial="closed"
@@ -599,7 +586,6 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
         </Box>
       </Box>
 
-      {}
       <Dialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
@@ -640,7 +626,6 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
         </DialogActions>
       </Dialog>
 
-      {}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}

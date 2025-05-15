@@ -280,6 +280,9 @@ const UserProfile = () => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
+  const [imageEditMode, setImageEditMode] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [editedData, setEditedData] = useState({
     displayName: "",
     username: "",
@@ -309,6 +312,73 @@ const UserProfile = () => {
   });
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [loginActivities, setLoginActivities] = useState([]);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedImage(file);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveImage = async () => {
+    if (!selectedImage) return;
+
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("No authenticated user");
+
+      let userRef;
+      const googleUserDoc = await getDoc(doc(db, "google", user.uid));
+      if (googleUserDoc.exists()) {
+        userRef = doc(db, "google", user.uid);
+      } else {
+        userRef = doc(db, "email", user.uid);
+      }
+
+      const reader = new FileReader();
+      reader.readAsDataURL(selectedImage);
+      reader.onloadend = async () => {
+        const base64Image = reader.result;
+
+        await updateDoc(userRef, {
+          "userData.photoURL": base64Image,
+        });
+
+        setUserData({
+          ...userData,
+          photoURL: base64Image,
+        });
+
+        const updatedUser = {
+          ...userData,
+          photoURL: base64Image,
+        };
+        sessionStorage.setItem("user", JSON.stringify(updatedUser));
+
+        setSnackbar({
+          open: true,
+          message: "Profile picture updated successfully!",
+          severity: "success",
+        });
+        setImageEditMode(false);
+        setSelectedImage(null);
+        setImagePreview(null);
+      };
+    } catch (error) {
+      console.error("Error updating profile picture:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to update profile picture",
+        severity: "error",
+      });
+    }
+  };
 
   const handleClickShowPassword = (field) => {
     setShowPassword({ ...showPassword, [field]: !showPassword[field] });
@@ -424,13 +494,35 @@ const UserProfile = () => {
             const googleUserDoc = await getDoc(googleUserRef);
 
             if (googleUserDoc.exists()) {
-              setUserData(googleUserDoc.data().userData);
+              const userData = googleUserDoc.data().userData;
+              if (
+                userData.photoURL &&
+                userData.photoURL.startsWith("data:image")
+              ) {
+                setUserData(userData);
+              } else {
+                setUserData({
+                  ...userData,
+                  photoURL: user.photoURL || userData.photoURL,
+                });
+              }
             } else {
               const emailUserRef = doc(db, "email", user.uid);
               const emailUserDoc = await getDoc(emailUserRef);
 
               if (emailUserDoc.exists()) {
-                setUserData(emailUserDoc.data().userData);
+                const userData = emailUserDoc.data().userData;
+                if (
+                  userData.photoURL &&
+                  userData.photoURL.startsWith("data:image")
+                ) {
+                  setUserData(userData);
+                } else {
+                  setUserData({
+                    ...userData,
+                    photoURL: null,
+                  });
+                }
               } else {
                 console.error("No user data found in either collection");
               }
@@ -724,22 +816,141 @@ const UserProfile = () => {
                 height: "100%",
               }}
             >
-              <Avatar
-                sx={{
-                  width: 150,
-                  height: 150,
-                  marginBottom: 3,
-                  fontSize: "3rem",
-                  border: `5px solid #0f1728`,
-                }}
-                alt={userData.displayName}
-                src={userData.photoURL || undefined}
-              >
-                {!userData.photoURL && userData.displayName
-                  ? userData.displayName[0]
-                  : ""}
-              </Avatar>
+              <Box sx={{ position: "relative" }}>
+                <Avatar
+                  sx={{
+                    width: 150,
+                    height: 150,
+                    marginBottom: 3,
+                    fontSize: "3rem",
+                    border: `5px solid #0f1728`,
+                    cursor: "pointer",
+                  }}
+                  alt={userData.displayName}
+                  src={imagePreview || userData.photoURL || undefined}
+                  onClick={() => setImageEditMode(true)}
+                >
+                  {!userData.photoURL && userData.displayName
+                    ? userData.displayName[0]
+                    : ""}
+                </Avatar>
 
+                <IconButton
+                  sx={{
+                    position: "absolute",
+                    bottom: 30,
+                    right: 10,
+                    backgroundColor: "#0f1728",
+                    "&:hover": {
+                      backgroundColor: "#334155",
+                    },
+                  }}
+                  onClick={() => setImageEditMode(true)}
+                >
+                  <FaEdit style={{ color: "#fff" }} />
+                </IconButton>
+              </Box>
+              <Dialog
+                open={imageEditMode}
+                onClose={() => {
+                  setImageEditMode(false);
+                  setSelectedImage(null);
+                  setImagePreview(null);
+                }}
+                maxWidth="sm"
+                sx={{
+                  "& .MuiDialog-paper": {
+                    backgroundColor: "#0f1728",
+                    color: "#fff",
+                    borderRadius: "30px",
+                    fontFamily: "Raleway, sans-serif",
+                  },
+                }}
+              >
+                <DialogTitle>Change Profile Picture</DialogTitle>
+                <DialogContent>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      p: 2,
+                    }}
+                  >
+                    <Avatar
+                      sx={{
+                        width: 200,
+                        height: 200,
+                        mb: 3,
+                        fontSize: "4rem",
+                        border: `5px solid #1e293b`,
+                      }}
+                      src={imagePreview || userData.photoURL || undefined}
+                    >
+                      {!imagePreview &&
+                      !userData.photoURL &&
+                      userData.displayName
+                        ? userData.displayName[0]
+                        : ""}
+                    </Avatar>
+
+                    <Button
+                      variant="contained"
+                      component="label"
+                      sx={{
+                        backgroundColor: "#1e293b",
+                        color: "#fff",
+                        mb: 2,
+                        "&:hover": {
+                          backgroundColor: "#334155",
+                        },
+                      }}
+                    >
+                      Select Image
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={handleImageChange}
+                      />
+                    </Button>
+
+                    <Typography
+                      variant="body2"
+                      sx={{ mt: 1, color: "#94a3b8" }}
+                    >
+                      Recommended size: 200x200 pixels
+                    </Typography>
+                  </Box>
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    onClick={() => {
+                      setImageEditMode(false);
+                      setSelectedImage(null);
+                      setImagePreview(null);
+                    }}
+                    sx={{ color: "#fff" }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSaveImage}
+                    variant="contained"
+                    disabled={!selectedImage}
+                    sx={{
+                      backgroundColor: "green",
+                      color: "#fff",
+                      "&:disabled": {
+                        backgroundColor: "#334155",
+                        color: "#64748b",
+                      },
+                    }}
+                  >
+                    Save
+                  </Button>
+                </DialogActions>
+              </Dialog>
               <Button
                 variant="contained"
                 startIcon={<FaEdit />}
@@ -890,7 +1101,7 @@ const UserProfile = () => {
                     />
                   </Grid>
                 )}
-                
+
                 <Grid item xs={12} sm={6}>
                   <SettingButton
                     title="Login Activity"

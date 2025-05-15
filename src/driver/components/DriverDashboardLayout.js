@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Box, IconButton, Badge, Tooltip } from "@mui/material";
-import Sidebar from "../screens/Sidebar";
-import Chatroom from "../screens/Chatroom"; 
+import Sidebar from "../screens/driverSidebar";
+import Chatroom from "../screens/Chatroom";
 import { FaComment } from "react-icons/fa";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 
-const DashboardLayout = () => {
+const DriverDashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeButton, setActiveButton] = useState("Home");
   const [isChatroomOpen, setIsChatroomOpen] = useState(false);
+  const [activeButton, setActiveButton] = useState("Home");
   const [unreadCount, setUnreadCount] = useState(0);
   const [lastSeen, setLastSeen] = useState(null);
   const [user] = useAuthState(auth);
@@ -19,25 +19,17 @@ const DashboardLayout = () => {
 
   useEffect(() => {
     const pathToButtonMap = {
-      "/dashboard": "Home",
-      "/dashboard/profile": "Profile",
-      "/dashboard/createroutes": "Routes",
-      "/dashboard/manageroutes": "Manage Routes",
-      "/dashboard/users": "Users",
-      "/dashboard/drivers": "Drivers",
-      "/dashboard/createdriver": "Create Driver",
-      "/dashboard/rideassign": "Ride Assign",
-      "/dashboard/vehicleregistration": "Vehicle Registration",
-      "/dashboard/managevehicles": "Manage Vehicles",
-      "/dashboard/feedbackandcomplaints": "Feedback and Complaints",
-      "/dashboard/paymentsettings": "Payment Settings",
-      "/dashboard/announcements": "Announcements",
+      "/driverdashboard": "Home",
+      "/driverdashboard/driverprofile": "Profile",
+      "/driverdashboard/routedetails": "Route Details",
+      "/driverdashboard/announcements": "Announcements",
     };
-    
-    const currentButton = Object.entries(pathToButtonMap).find(
-      ([path]) => location.pathname === path
-    )?.[1] || "Home";
-    
+
+    const currentButton =
+      Object.entries(pathToButtonMap).find(
+        ([path]) => location.pathname === path
+      )?.[1] || "Home";
+
     setActiveButton(currentButton);
   }, [location.pathname]);
 
@@ -83,7 +75,7 @@ const DashboardLayout = () => {
         activeButton={activeButton}
         setActiveButton={setActiveButton}
       />
-      
+
       <Box
         component="main"
         sx={{
@@ -142,4 +134,4 @@ const DashboardLayout = () => {
   );
 };
 
-export default DashboardLayout;
+export default DriverDashboardLayout;

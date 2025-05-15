@@ -15,13 +15,19 @@ import {
   Chip,
   Checkbox,
   FormControlLabel,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Paper,
 } from "@mui/material";
 import { motion } from "framer-motion";
-import { FaPlus, FaSave } from "react-icons/fa";
+import { FaPlus, FaSave, FaTrash, FaMapMarkerAlt } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
 import { LoadScript, GoogleMap, Marker } from "@react-google-maps/api";
 import { collection, addDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
+
 import { TrafficLayer } from "@react-google-maps/api";
 
 const mapContainerStyle = {
@@ -36,6 +42,8 @@ const CreateRoutes = () => {
   const { routeId } = useParams();
   const navigate = useNavigate();
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [waypointInput, setWaypointInput] = useState("");
+  const [waypointPositions, setWaypointPositions] = useState([]);
   const [routeForm, setRouteForm] = useState({
     id: "",
     routeId: "",
@@ -44,8 +52,8 @@ const CreateRoutes = () => {
     destination: "",
     waypoints: [],
     status: "active",
-    pickupTime: new Date(Date.now() + 3600000).toISOString().slice(0, 16), // Default to 1 hour from now
-    dropoffTime: new Date(Date.now() + 7200000).toISOString().slice(0, 16), // Default to 2 hours from now
+    pickupTime: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
+    dropoffTime: new Date(Date.now() + 7200000).toISOString().slice(0, 16),
     recurring: false,
     recurrencePattern: "",
   });
@@ -62,7 +70,6 @@ const CreateRoutes = () => {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showMapLoadMessage, setShowMapLoadMessage] = useState(true);
   const [editingRoute, setEditingRoute] = useState(false);
-
 
   useEffect(() => {
     if (routeId) {
@@ -112,7 +119,51 @@ const CreateRoutes = () => {
       localStorage.setItem("routeInstructionsShown", "true");
     }
   }, [routeId]);
+  const handleAddWaypoint = async () => {
+    if (!waypointInput.trim()) return;
 
+    try {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: waypointInput }, (results, status) => {
+        if (status === "OK" && results[0]) {
+          const location = results[0].geometry.location;
+          const newWaypoint = {
+            address: waypointInput,
+            position: { lat: location.lat(), lng: location.lng() },
+          };
+
+          setRouteForm((prev) => ({
+            ...prev,
+            waypoints: [...prev.waypoints, waypointInput],
+          }));
+
+          setWaypointPositions((prev) => [...prev, newWaypoint]);
+          setWaypointInput("");
+        } else {
+          setSnackbar({
+            open: true,
+            message: "Could not find location for this waypoint",
+            severity: "warning",
+          });
+        }
+      });
+    } catch (error) {
+      console.error("Error adding waypoint:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to add waypoint",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleRemoveWaypoint = (index) => {
+    setRouteForm((prev) => ({
+      ...prev,
+      waypoints: prev.waypoints.filter((_, i) => i !== index),
+    }));
+    setWaypointPositions((prev) => prev.filter((_, i) => i !== index));
+  };
   const updateAddressFromCoordinates = async (position, field) => {
     try {
       const response = await fetch(
@@ -272,10 +323,9 @@ const CreateRoutes = () => {
     const newValue = e.target.value;
     setRouteForm((prev) => ({ ...prev, pickupTime: newValue }));
 
-    // Auto-adjust dropoff time if it's now before pickup
     if (newValue >= routeForm.dropoffTime) {
       const pickupDate = new Date(newValue);
-      const newDropoff = new Date(pickupDate.getTime() + 3600000); // Add 1 hour
+      const newDropoff = new Date(pickupDate.getTime() + 3600000);
       setRouteForm((prev) => ({
         ...prev,
         dropoffTime: newDropoff.toISOString().slice(0, 16),
@@ -338,6 +388,12 @@ const CreateRoutes = () => {
         pickupTime: pickupDate,
         dropoffTime: dropoffDate,
         recurring: routeForm.recurring,
+        waypoints: routeForm.waypoints,
+        waypointCoordinates: waypointPositions.map((wp) => ({
+          address: wp.address,
+          latitude: wp.position.lat,
+          longitude: wp.position.lng,
+        })),
         recurrencePattern: routeForm.recurring
           ? routeForm.recurrencePattern
           : "",
@@ -631,8 +687,6 @@ const CreateRoutes = () => {
           required
         />
 
-       
-
         <TextField
           margin="dense"
           name="destination"
@@ -646,8 +700,6 @@ const CreateRoutes = () => {
           sx={{ mb: 2 }}
           required
         />
-
-        
 
         {locationLoading ? (
           <Box
@@ -723,22 +775,243 @@ const CreateRoutes = () => {
           </LoadScript>
         )}
 
-        <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
-          Waypoints (Add one per line)
-        </Typography>
-        <TextField
-          margin="dense"
-          name="waypoints"
-          label="Waypoints"
-          type="text"
-          fullWidth
-          variant="outlined"
-          multiline
-          rows={4}
-          placeholder="Address 1\nAddress 2\n..."
-          value={routeForm.waypoints.join("\n")}
-          onChange={handleWaypointsChange}
-        />
+        <Box sx={{ mt: 3, mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Waypoints
+          </Typography>
+
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <TextField
+              margin="dense"
+              label="Add Waypoint"
+              type="text"
+              fullWidth
+              variant="outlined"
+              value={waypointInput}
+              onChange={(e) => setWaypointInput(e.target.value)}
+              placeholder="Enter waypoint address"
+            />
+            <Button
+              variant="contained"
+              onClick={handleAddWaypoint}
+              startIcon={<FaPlus />}
+              sx={{ height: "56px", mt: "8px" }}
+              disabled={!waypointInput.trim()}
+            >
+              Add
+            </Button>
+          </Box>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1fr 2fr" },
+              gap: 3,
+            }}
+          >
+            {/* Waypoints List */}
+{/* Waypoints List - Creative Design */}
+{routeForm.waypoints.length > 0 ? (
+  <Paper elevation={2} sx={{ 
+    maxHeight: "600px", 
+    overflow: "auto",
+    background: "linear-gradient(145deg, #f5f7fa 0%, #e4e8f0 100%)",
+    borderRadius: "12px",
+    p: 2,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.1)"
+  }}>
+    <List dense disablePadding>
+      {routeForm.waypoints.map((waypoint, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: index * 0.05 }}
+        >
+          <ListItem
+            sx={{
+              mb: 1,
+              p: 2,
+              borderRadius: "8px",
+              background: "white",
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "translateY(-2px)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                background: "#f8f9fa"
+              },
+              position: "relative",
+              "&:before": {
+                content: '""',
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: "4px",
+                background: "linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%)",
+                borderTopLeftRadius: "8px",
+                borderBottomLeftRadius: "8px"
+              }
+            }}
+            secondaryAction={
+              <IconButton
+                edge="end"
+                aria-label="delete"
+                onClick={() => handleRemoveWaypoint(index)}
+                sx={{
+                  color: "#ff6b6b",
+                  "&:hover": {
+                    background: "rgba(255,107,107,0.1)"
+                  }
+                }}
+              >
+                <FaTrash />
+              </IconButton>
+            }
+          >
+            <ListItemText
+              primary={
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  <Box 
+                    component="span" 
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                      color: "white",
+                      fontSize: "0.8rem",
+                      mr: 1.5
+                    }}
+                  >
+                    {index + 1}
+                  </Box>
+                  {waypoint}
+                </Typography>
+              }
+              secondary={
+                <Typography variant="caption" color="text.secondary">
+                  {waypointPositions[index]?.address || "Locating..."}
+                </Typography>
+              }
+              sx={{ ml: 1 }}
+            />
+          </ListItem>
+        </motion.div>
+      ))}
+    </List>
+  </Paper>
+) : (
+  <Box
+    sx={{
+      height: "600px",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      background: "linear-gradient(145deg, #f5f7fa 0%, #e4e8f0 100%)",
+      borderRadius: "12px",
+      p: 4,
+      textAlign: "center"
+    }}
+  >
+    <Box
+      sx={{
+        width: "80px",
+        height: "80px",
+        borderRadius: "50%",
+        background: "linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        mb: 2
+      }}
+    >
+      <FaMapMarkerAlt style={{ fontSize: "32px", color: "#667eea" }} />
+    </Box>
+    <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
+      No Waypoints Added
+    </Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: "300px" }}>
+      Add locations to create stops along your route. These will appear on the map.
+    </Typography>
+  </Box>
+)}
+
+            {/* Waypoints Map */}
+            {/* Waypoints Map */}
+            {mapLoaded && waypointPositions.length > 0 && (
+              <Box
+                sx={{
+                  height: "600px",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                }}
+              >
+                <GoogleMap
+                  mapContainerStyle={{ width: "100%", height: "100%" }}
+                  center={
+                    waypointPositions.length > 0
+                      ? waypointPositions[0].position
+                      : originPosition || { lat: 0, lng: 0 }
+                  }
+                  zoom={waypointPositions.length > 0 ? 12 : 6}
+                  options={{
+                    streetViewControl: true,
+                    mapTypeControl: true,
+                    fullscreenControl: true,
+                    mapTypeId: "hybrid",
+                    styles: [
+                      {
+                        featureType: "all",
+                        elementType: "labels",
+                        stylers: [{ visibility: "on" }],
+                      },
+                    ],
+                  }}
+                >
+                  {waypointPositions.map((waypoint, index) => (
+                    <Marker
+                      key={index}
+                      draggable={true}
+                      position={waypoint.position}
+                      icon={{
+                        url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+                      }}
+                      label={{
+                        text: `${index + 1}`,
+                        color: "white",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                      }}
+                    />
+                  ))}
+                  {originPosition && (
+                    <Marker
+                      draggable={true}
+                      position={originPosition}
+                      icon={{
+                        url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+                      }}
+                    />
+                  )}
+                  {destinationPosition && (
+                    <Marker
+                      draggable={true}
+                      position={destinationPosition}
+                      icon={{
+                        url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                      }}
+                    />
+                  )}
+                </GoogleMap>
+              </Box>
+            )}
+          </Box>
+        </Box>
 
         <Box
           sx={{

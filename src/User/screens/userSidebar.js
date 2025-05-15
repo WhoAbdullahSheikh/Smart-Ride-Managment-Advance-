@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Box, Button, Typography, Divider } from "@mui/material";
-import { FaBars, FaHome, FaUser, FaRoute, FaUsers, FaCar, FaSignOutAlt, FaHistory } from "react-icons/fa";
+import { FaBars, FaHome, FaUser, FaRoute, FaUsers, FaCar, FaSignOutAlt, FaHistory, FaMoneyBill, FaRegComment } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
@@ -39,7 +39,16 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
       icon: <FaHistory />,
       path: "/userdashboard/bookinghistory"
     },
-
+    {
+      name: "Payment",
+      icon: <FaMoneyBill />,
+      path: "/userdashboard/payment"
+    },
+    {
+      name: "Feedback and Complaints",
+      icon: <FaRegComment />,
+      path: "/userdashboard/feedbackandcomplaints",
+    },
   ];
 
   const handleSignOut = async () => {

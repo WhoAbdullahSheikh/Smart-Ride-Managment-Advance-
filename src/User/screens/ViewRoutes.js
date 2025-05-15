@@ -53,13 +53,11 @@ const ViewRoutes = () => {
       const auth = getAuth();
       const user = auth.currentUser;
 
-      // Fetch all routes
       const routesQuery = await getDocs(collection(db, "routes"));
       const routesData = routesQuery.docs.map((doc) => ({
         id: doc.id,
         routeId: doc.id,
         ...doc.data(),
-        // Convert Firestore Timestamps to Date objects if they exist
         pickupTime: doc.data().pickupTime?.toDate() || null,
         dropoffTime: doc.data().dropoffTime?.toDate() || null,
         createdAt: doc.data().createdAt?.toDate() || null,
@@ -68,7 +66,6 @@ const ViewRoutes = () => {
       setAllRoutes(routesData);
 
       if (user) {
-        // Query bookings collection for this user's bookings
         const bookingsQuery = query(
           collection(db, "bookings"),
           where("userEmail", "==", user.email)
@@ -106,21 +103,18 @@ const ViewRoutes = () => {
     fetchRoutes();
   };
 
-  // Filter out routes that are rejected or user has already booked
   const availableRoutes = allRoutes.filter((route) => {
     const auth = getAuth();
     const user = auth.currentUser;
 
-    // Hide rejected routes
     if (route.status === "rejected") return false;
 
-    // Show only active, approved, or cancelled routes
     const isRouteVisible = ["active", "approved", "cancelled"].includes(
       route.status
     );
     if (!isRouteVisible) return false;
 
-    if (!user) return true; // Show all visible routes if not logged in
+    if (!user) return true;
 
     return !userBookedRoutes.some(
       (booking) =>
@@ -133,7 +127,7 @@ const ViewRoutes = () => {
     try {
       const auth = getAuth();
       const user = auth.currentUser;
-
+  
       if (!user) {
         setSnackbar({
           open: true,
@@ -142,16 +136,15 @@ const ViewRoutes = () => {
         });
         return;
       }
-
+  
       const routeIdentifier = route.id || route.routeId;
-
-      // Check if user has already booked this route
+  
       const alreadyBooked = userBookedRoutes.some(
         (booking) =>
           booking.routeId === routeIdentifier &&
           booking.userEmail === user.email
       );
-
+  
       if (alreadyBooked) {
         setSnackbar({
           open: true,
@@ -160,8 +153,7 @@ const ViewRoutes = () => {
         });
         return;
       }
-
-      // Don't allow booking if route is not active/approved/cancelled
+  
       if (!["active", "approved", "cancelled"].includes(route.status)) {
         setSnackbar({
           open: true,
@@ -170,7 +162,22 @@ const ViewRoutes = () => {
         });
         return;
       }
-
+  
+      let userName = user.displayName || "User";
+      
+      if (user.providerData[0].providerId === "password") {
+        const emailQuery = query(
+          collection(db, "email"),
+          where("userData.email", "==", user.email)
+        );
+        const emailSnapshot = await getDocs(emailQuery);
+  
+        if (!emailSnapshot.empty) {
+          const userData = emailSnapshot.docs[0].data().userData;
+          userName = userData.displayName || user.displayName || "User";
+        }
+      }
+  
       const bookingData = {
         routeId: routeIdentifier,
         routeName: route.name,
@@ -182,41 +189,32 @@ const ViewRoutes = () => {
         status: "pending",
         userId: user.uid,
         userEmail: user.email,
-        userName: user.displayName || "User",
+        userName: userName,
       };
-
-      // 1. Add to bookings collection
+  
       const bookingRef = await addDoc(collection(db, "bookings"), bookingData);
-
-      // 2. Update user document in both collections
-      const updateUserBooking = async (collectionName) => {
-        const usersQuery = query(
-          collection(db, collectionName),
+  
+      const updateUserBooking = async () => {
+        const emailQuery = query(
+          collection(db, "email"),
           where("userData.email", "==", user.email)
         );
-        const querySnapshot = await getDocs(usersQuery);
-
+        const querySnapshot = await getDocs(emailQuery);
+  
         if (!querySnapshot.empty) {
           const userDoc = querySnapshot.docs[0];
-          await updateDoc(doc(db, collectionName, userDoc.id), {
+          await updateDoc(doc(db, "email", userDoc.id), {
             bookings: arrayUnion({
               bookingId: bookingRef.id,
               ...bookingData,
             }),
             updatedAt: new Date(),
           });
-          return true;
         }
-        return false;
       };
-
-      // Try updating in both collections
-      const updatedInGoogle = await updateUserBooking("google");
-      const updatedInEmail = !updatedInGoogle
-        ? await updateUserBooking("email")
-        : false;
-
-      // Update local state to reflect the new booking
+  
+      await updateUserBooking();
+  
       setUserBookedRoutes([
         ...userBookedRoutes,
         {
@@ -224,7 +222,7 @@ const ViewRoutes = () => {
           userEmail: user.email,
         },
       ]);
-
+  
       setSnackbar({
         open: true,
         message: `Ride booked successfully for ${route.name}`,
@@ -239,7 +237,7 @@ const ViewRoutes = () => {
       });
     }
   };
-
+  
   const formatDateTime = (date) => {
     if (!date) return "N/A";
     return date.toLocaleString([], {
@@ -281,7 +279,6 @@ const ViewRoutes = () => {
             Available Routes
           </Typography>
           <Tooltip title="Refresh routes">
-            
             <IconButton
               onClick={handleRefresh}
               color="primary"

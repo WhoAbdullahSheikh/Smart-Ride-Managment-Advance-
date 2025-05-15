@@ -1,19 +1,7 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Box, Button, Typography, Divider } from "@mui/material";
-import {
-  FaBars,
-  FaHome,
-  FaUser,
-  FaRoute,
-  FaUsers,
-  FaCar,
-  FaSignOutAlt,
-  FaRegIdCard,
-  FaRegComment,
-  FaMoneyBillWave,
-} from "react-icons/fa";
-import { RiSteering2Fill } from "react-icons/ri";
+import { FaBars, FaHome, FaUser, FaRoute, FaUsers, FaCar, FaSignOutAlt, FaHistory, FaRegComment } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
@@ -36,66 +24,19 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
   };
 
   const mainButtons = [
-    {
-      name: "Home",
-      icon: <FaHome />,
-      path: "/dashboard",
-    },
-    {
-      name: "Routes",
-      icon: <FaRoute />,
-      path: "/dashboard/createroutes",
-    },
-    {
-      name: "Manage Routes",
-      icon: <FaRoute />,
-      path: "/dashboard/manageroutes",
-    },
-    {
-      name: "Ride Assign",
-      icon: <FaCar />,
-      path: "/dashboard/rideassign",
-    },
-    {
-      name: "Manage Users",
-      icon: <FaUsers />,
-      path: "/dashboard/users",
-    },
-    {
-      name: "Create Drivers",
-      icon: <RiSteering2Fill />,
-      path: "/dashboard/createdriver",
-    },
-    {
-      name: "Manage Drivers",
-      icon: <FaRegIdCard />,
-      path: "/dashboard/drivers",
-    },
-    {
-      name: "Vehicle Registration",
-      icon: <FaCar />,
-      path: "/dashboard/vehicleregistration",
-    },
-    {
-      name: "Manage Vehicles",
-      icon: <FaCar />,
-      path: "/dashboard/managevehicles",
-    },
-    {
-      name: "Payment Settings",
-      icon: <FaMoneyBillWave />,
-      path: "/dashboard/paymentsettings",
+    { 
+      name: "Home", 
+      icon: <FaHome />, 
+      path: "/driverdashboard"
     },
     {
       name: "Announcements",
       icon: <FaRegComment />,
-      path: "/dashboard/announcements",
+      path: "/driverdashboard/announcements",
     },
-    {
-      name: "Feedback and Complaints",
-      icon: <FaRegComment />,
-      path: "/dashboard/feedbackandcomplaints",
-    },
+    
+
+
   ];
 
   const handleSignOut = async () => {
@@ -113,15 +54,15 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
     {
       name: "Profile",
       icon: <FaUser />,
-      path: "/dashboard/profile",
+      path: "/driverdashboard/driverprofile"
     },
     {
       name: "Sign Out",
       icon: <FaSignOutAlt />,
       action: handleSignOut,
       color: "#e74a3b",
-      hoverColor: "rgba(231, 73, 59, 0.1)",
-    },
+      hoverColor: "rgba(231, 73, 59, 0.1)"
+    }
   ];
 
   const sidebarVariants = {
@@ -148,16 +89,12 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
           if (button.action) button.action();
         }}
         sx={{
-          color:
-            activeButton === button.name
-              ? colors.textPrimary
-              : colors.textSecondary,
+          color: activeButton === button.name ? colors.textPrimary : colors.textSecondary,
           justifyContent: isOpen ? "flex-start" : "center",
           textTransform: "none",
           borderRadius: "8px",
           padding: isOpen ? "12px 20px" : "12px 0",
-          backgroundColor:
-            activeButton === button.name ? colors.activeBg : "transparent",
+          backgroundColor: activeButton === button.name ? colors.activeBg : "transparent",
           transition: "all 0.3s ease",
           position: "relative",
           overflow: "hidden",
@@ -175,10 +112,9 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
             transition: "transform 0.3s ease",
           },
           "&:hover": {
-            backgroundColor:
-              activeButton === button.name
-                ? colors.activeBg
-                : button.hoverColor || colors.hoverBg,
+            backgroundColor: activeButton === button.name 
+              ? colors.activeBg 
+              : button.hoverColor || colors.hoverBg,
             "&:before": {
               transform: "scaleY(1)",
             },
@@ -195,10 +131,9 @@ const Sidebar = ({ isOpen, toggleSidebar, activeButton, setActiveButton }) => {
         >
           <Box
             sx={{
-              color:
-                activeButton === button.name
-                  ? colors.iconActive
-                  : button.color || colors.iconInactive,
+              color: activeButton === button.name 
+                ? colors.iconActive 
+                : button.color || colors.iconInactive,
               fontSize: "1.2rem",
               transition: "color 0.3s ease",
             }}

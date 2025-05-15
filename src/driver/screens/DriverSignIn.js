@@ -12,21 +12,29 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from "@mui/material";
-import { UAParser } from 'ua-parser-js';
-import { FaEnvelope, FaLock } from "react-icons/fa";
-import { 
+import { UAParser } from "ua-parser-js";
+import { FaEnvelope, FaLock, FaPhone } from "react-icons/fa";
+import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth } from "../firebase";
-import { arrayUnion, updateDoc } from "firebase/firestore";
-import backgroundImage from "../../assets/images/img.jpg";
+import {
+  arrayUnion,
+  updateDoc,
+  query,
+  collection,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import backgroundImage from "../../assets/images/login.png";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
-const AdminSignIn = () => {
-  const [email, setEmail] = useState("");
+const DriverSignIn = () => {
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [openSnackbar, setOpenSnackbar] = useState(false);
@@ -35,131 +43,144 @@ const AdminSignIn = () => {
   const [resetEmail, setResetEmail] = useState("");
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const getDeviceInfo = () => {
-    const userAgent = navigator.userAgent;
     const parser = new UAParser();
     const result = parser.getResult();
-    
-    let deviceInfo = {
-      type: 'Unknown',
-      model: 'Unknown',
-      os: 'Unknown',
-      browser: 'Unknown'
+    return {
+      type: result.device.type || "desktop",
+      model: result.device.model || "unknown",
+      os: result.os.name || "unknown",
+      browser: result.browser.name || "unknown",
     };
-  
-    if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent)) {
-      deviceInfo.type = 'Mobile';
-      if (/Android/.test(userAgent)) deviceInfo.type = 'Android';
-      if (/iPhone|iPad|iPod/.test(userAgent)) deviceInfo.type = 'iOS';
-    } else {
-      deviceInfo.type = 'Desktop';
-      if (/Windows/.test(userAgent)) deviceInfo.type = 'Windows PC';
-      if (/Mac/.test(userAgent)) deviceInfo.type = 'Mac';
-      if (/Linux/.test(userAgent)) deviceInfo.type = 'Linux PC';
-    }
-  
-    if (result.device.model) {
-      deviceInfo.model = result.device.model;
-    }
-    
-    if (result.os.name) {
-      deviceInfo.os = `${result.os.name} ${result.os.version || ''}`.trim();
-    }
-    
-    if (result.browser.name) {
-      deviceInfo.browser = `${result.browser.name} ${result.browser.version || ''}`.trim();
-    }
-  
-    return deviceInfo;
   };
 
-  const handleEmailSignIn = async (e) => {
+  const handleDriverSignIn = async (e) => {
     e.preventDefault();
     setError("");
-  
+    setLoading(true);
+
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      const user = userCredential.user;
-  
-      if (!user.emailVerified) {
-        await auth.signOut();
-        throw new Error("Please verify your email before signing in.");
-      }
-  
-      const emailUserRef = doc(db, "admin", user.uid);
-      const emailUserDoc = await getDoc(emailUserRef);
-  
-      if (!emailUserDoc.exists()) {
-        await auth.signOut();
-        throw new Error("Account not found in database");
-      }
-  
-      if (!emailUserDoc.data().userData?.emailVerified) {
-        await updateDoc(emailUserRef, {
-          "userData.emailVerified": true
+      const isPhoneNumber = /^\+?[0-9]{10,15}$/.test(identifier);
+
+      if (isPhoneNumber) {
+        const driversQuery = query(
+          collection(db, "drivers"),
+          where("userData.phone", "==", identifier)
+        );
+        const querySnapshot = await getDocs(driversQuery);
+
+        if (querySnapshot.empty) {
+          throw new Error("No driver found with this phone number");
+        }
+
+        const driverDoc = querySnapshot.docs[0];
+        const driverData = driverDoc.data().userData;
+
+        sessionStorage.setItem(
+          "driver",
+          JSON.stringify({
+            ...driverData,
+            uid: driverDoc.id,
+            displayName: driverData.name,
+          })
+        );
+
+        const loginActivity = {
+          timestamp: new Date().toISOString(),
+          device: getDeviceInfo(),
+          ip: await fetch("https://api.ipify.org?format=json")
+            .then((response) => response.json())
+            .then((data) => data.ip)
+            .catch(() => "IP not available"),
+        };
+
+        await updateDoc(doc(db, "drivers", driverDoc.id), {
+          loginActivities: arrayUnion(loginActivity),
         });
+
+        setSnackbarMessage("Successfully logged in as driver!");
+        setSnackbarSeverity("success");
+        setOpenSnackbar(true);
+
+        setTimeout(() => {
+          navigate("/driverdashboard");
+        }, 2000);
+      } else {
+        const userCredential = await signInWithEmailAndPassword(
+          auth,
+          identifier,
+          password
+        );
+        const user = userCredential.user;
+
+        const driverRef = doc(db, "drivers", user.uid);
+        const driverDoc = await getDoc(driverRef);
+
+        if (!driverDoc.exists()) {
+          await auth.signOut();
+          throw new Error("Driver account not found in database");
+        }
+
+        const driverData = driverDoc.data().userData;
+
+        const loginActivity = {
+          timestamp: new Date().toISOString(),
+          device: getDeviceInfo(),
+          ip: await fetch("https://api.ipify.org?format=json")
+            .then((response) => response.json())
+            .then((data) => data.ip)
+            .catch(() => "IP not available"),
+        };
+
+        await updateDoc(driverRef, {
+          loginActivities: arrayUnion(loginActivity),
+        });
+
+        sessionStorage.setItem(
+          "driver",
+          JSON.stringify({
+            ...driverData,
+            uid: user.uid,
+            email: user.email,
+            displayName: driverData.name,
+            createdAt: driverData.createdAt,
+            licenseNumber: driverData.licenseNumber,
+            licenseType: driverData.licenseType,
+            phone: driverData.phone,
+            profileImage: driverData.profileImage,
+            status: driverData.status,
+          })
+        );
+
+        setSnackbarMessage("Successfully logged in!");
+        setSnackbarSeverity("success");
+        setOpenSnackbar(true);
+
+        setTimeout(() => {
+          navigate("/driverdashboard");
+        }, 2000);
       }
-  
-      const loginActivity = {
-        timestamp: new Date().toISOString(),
-        device: {
-          type: getDeviceInfo().type,
-          model: getDeviceInfo().model,
-          os: getDeviceInfo().os,
-          browser: getDeviceInfo().browser
-        },
-        ip: await fetch('https://api.ipify.org?format=json')
-          .then(response => response.json())
-          .then(data => data.ip)
-          .catch(() => 'IP not available')
-      };
-      await updateDoc(emailUserRef, {
-        loginActivities: arrayUnion(loginActivity),
-      });
-  
-      const userData = emailUserDoc.data().userData || emailUserDoc.data();
-  
-      sessionStorage.setItem(
-        "user",
-        JSON.stringify({
-          ...userData,
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || userData.displayName,
-          createdAt: userData.createdAt || {
-            seconds: Math.floor(Date.now() / 1000),
-          },
-          emailVerified: true
-        })
-      );
-  
-      setSnackbarMessage("Successfully logged in!");
-      setSnackbarSeverity("success");
-      setOpenSnackbar(true);
-  
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 2000);
     } catch (error) {
       console.error("Error signing in:", error);
-  
+      setLoading(false);
+
       let errorMessage = "Error during sign-in. Please try again.";
       if (error.code === "auth/user-not-found") {
         errorMessage = "This account does not exist.";
-      } else if (error.message === "Account not found in database") {
-        errorMessage = "Account does not exist.";
+      } else if (
+        error.message === "Driver account not found in database" ||
+        error.message === "No driver found with this phone number"
+      ) {
+        errorMessage = error.message;
       } else if (error.code === "auth/wrong-password") {
         errorMessage = "Incorrect password.";
-      } else if (error.message === "Please verify your email before signing in.") {
-        errorMessage = error.message;
+      } else if (error.code === "auth/too-many-requests") {
+        errorMessage = "Too many attempts. Please try again later.";
       }
-  
+
       setSnackbarMessage(errorMessage);
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
@@ -169,7 +190,7 @@ const AdminSignIn = () => {
   const handleForgotPassword = () => {
     setResetDialogOpen(true);
     setResetSuccess(false);
-    setResetEmail(email);
+    setResetEmail(identifier);
   };
 
   const handleResetPassword = async () => {
@@ -277,22 +298,30 @@ const AdminSignIn = () => {
             variant="h4"
             sx={{ mb: 2, fontFamily: "Raleway, sans-serif" }}
           >
-            Sign In
+            Driver Sign In
           </Typography>
 
-          <form onSubmit={handleEmailSignIn} style={{ width: "100%" }}>
+          <form onSubmit={handleDriverSignIn} style={{ width: "100%" }}>
             <TextField
               required
               fullWidth
-              label="Email Address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              label="Email or Phone Number"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               margin="normal"
               InputProps={{
                 startAdornment: (
-                  <FaEnvelope
-                    style={{ marginRight: "15px", color: "#0f1728" }}
-                  />
+                  <>
+                    {/^[0-9]/.test(identifier) ? (
+                      <FaPhone
+                        style={{ marginRight: "15px", color: "#0f1728" }}
+                      />
+                    ) : (
+                      <FaEnvelope
+                        style={{ marginRight: "15px", color: "#0f1728" }}
+                      />
+                    )}
+                  </>
                 ),
               }}
               sx={{
@@ -314,7 +343,7 @@ const AdminSignIn = () => {
                   fontFamily: "Raleway-Bold, sans-serif",
                 },
               }}
-              placeholder="Enter your email"
+              placeholder="Enter your email or phone number"
             />
 
             <TextField
@@ -349,7 +378,7 @@ const AdminSignIn = () => {
                   fontFamily: "Raleway-Bold, sans-serif",
                 },
               }}
-              placeholder="Enter your password"
+              placeholder="Enter your password (if using email)"
             />
 
             <Button
@@ -357,6 +386,7 @@ const AdminSignIn = () => {
               fullWidth
               variant="contained"
               color="#0f1728"
+              disabled={loading}
               sx={{
                 mt: 3,
                 py: 1,
@@ -370,32 +400,22 @@ const AdminSignIn = () => {
                   boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
                   transform: "scale(1.01)",
                 },
-              }}
-            >
-              Sign In
-            </Button>
-          </form>
-
-          <Box sx={{ width: "100%", textAlign: "right", mt: 1 }}>
-            <Button
-              onClick={handleForgotPassword}
-              sx={{
-                textTransform: "none",
-                color: "#0f1728",
-                fontFamily: "Raleway, sans-serif",
-                fontSize: "0.875rem",
-                "&:hover": {
-                  textDecoration: "underline",
-                  backgroundColor: "transparent",
+                "&:disabled": {
+                  backgroundColor: "#cccccc",
+                  color: "#666666",
                 },
               }}
             >
-              Forgot Password?
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                "Sign In"
+              )}
             </Button>
-          </Box>
+          </form>
 
+          
 
-          {}
           <Dialog
             open={resetDialogOpen}
             onClose={() => setResetDialogOpen(false)}
@@ -412,12 +432,14 @@ const AdminSignIn = () => {
             <DialogContent>
               {resetSuccess ? (
                 <Typography sx={{ fontFamily: "Raleway, sans-serif" }}>
-                  Password reset email sent to {resetEmail}. Please check your inbox.
+                  Password reset email sent to {resetEmail}. Please check your
+                  inbox.
                 </Typography>
               ) : (
                 <>
                   <Typography sx={{ mb: 2, fontFamily: "Raleway, sans-serif" }}>
-                    Enter your email address and we'll send you a link to reset your password.
+                    Enter your email address and we'll send you a link to reset
+                    your password.
                   </Typography>
                   <TextField
                     fullWidth
@@ -468,4 +490,4 @@ const AdminSignIn = () => {
   );
 };
 
-export default AdminSignIn;
+export default DriverSignIn;

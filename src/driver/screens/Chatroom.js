@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
@@ -20,6 +21,8 @@ import {
   DialogContentText,
   DialogActions,
   Button,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   FaPaperPlane,
@@ -40,7 +43,7 @@ import {
   onSnapshot,
   limit,
   deleteDoc,
-  doc,    
+  doc,
   getDoc,
   getDocs,
   where,
@@ -58,8 +61,23 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "error",
+  });
   const messagesEndRef = useRef(null);
   const chatHeaderRef = useRef(null);
+
+  const getDeviceId = useCallback(() => {
+    let deviceId = localStorage.getItem('deviceId');
+    if (!deviceId) {
+      deviceId = Math.random().toString(36).substring(2, 15) + 
+                Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('deviceId', deviceId);
+    }
+    return deviceId;
+  }, []);
 
   const fetchMessages = useCallback(() => {
     setLoading(true);
@@ -105,68 +123,91 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
   const handleSendMessage = useCallback(
     async (e) => {
       e.preventDefault();
-      if (!newMessage.trim() || !user) return;
-
-      const isEmailUser = user.providerData.some(
-        (provider) => provider.providerId === "password"
-      );
-
-      let displayNameToUse = user.displayName;
-      let photoURLToUse = user.photoURL;
-
-      if (isEmailUser) {
-        try {
-          const emailQuery = query(
-            collection(db, "email"),
-            where("userData.email", "==", user.email)
-          );
-          const querySnapshot = await getDocs(emailQuery);
-
-          if (!querySnapshot.empty) {
-            const userDoc = querySnapshot.docs[0];
-            const userData = userDoc.data().userData;
-            displayNameToUse = userData.displayName || displayNameToUse;
-            photoURLToUse = userData.photoURL || photoURLToUse;
-          }
-        } catch (error) {
-          console.error(
-            "Error fetching user details from email collection:",
-            error
-          );
-        }
+      if (!newMessage.trim()) {
+        setSnackbar({
+          open: true,
+          message: "Message cannot be empty",
+          severity: "error",
+        });
+        return;
       }
 
       const tempId = `temp-${Date.now()}`;
       try {
-        const optimisticMessage = {
-          id: tempId,
+        // Determine user type and set appropriate display name
+        let displayName = "Driver";
+        let isAdmin = false;
+        
+        if (user) {
+          // Check if user is admin
+          const adminDoc = await getDoc(doc(db, "admin", "userdata"));
+          if (adminDoc.exists()) {
+            const adminData = adminDoc.data();
+            const adminEntry = Object.entries(adminData).find(
+              ([key, value]) => value.email === user.email
+            );
+            
+            if (adminEntry) {
+              displayName = "Administrator";
+              isAdmin = true;
+            } else {
+              // Check if user is a driver
+              const driverQuery = query(
+                collection(db, "drivers"),
+                where("userData.email", "==", user.email)
+              );
+              const driverSnapshot = await getDocs(driverQuery);
+              
+              if (!driverSnapshot.empty) {
+                const driverData = driverSnapshot.docs[0].data().userData;
+                displayName = driverData.displayName || "Driver";
+              }
+            }
+          }
+        }
+
+        const messageData = {
           text: newMessage,
-          uid: user.uid,
-          displayName: displayNameToUse,
-          photoURL: photoURLToUse,
-          timestamp: new Date(),
+          timestamp: serverTimestamp(),
+          displayName,
+          isAdmin,
+          ...(user
+            ? {
+                uid: user.uid,
+                photoURL: user.photoURL || "",
+                isAuthenticated: true,
+              }
+            : {
+                deviceId: getDeviceId(),
+                isAuthenticated: false,
+              }),
         };
 
+        // Optimistic UI update
+        const optimisticMessage = {
+          id: tempId,
+          ...messageData,
+          timestamp: new Date(),
+        };
         setMessages((prev) => [...prev, optimisticMessage]);
         setNewMessage("");
         setShowEmojiPicker(false);
 
-        await addDoc(collection(db, "messages"), {
-          text: newMessage,
-          uid: user.uid,
-          displayName: displayNameToUse,
-          photoURL: photoURLToUse,
-          timestamp: serverTimestamp(),
-        });
+        await addDoc(collection(db, "messages"), messageData);
 
-        setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
       } catch (error) {
         console.error("Error sending message:", error);
         setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+        setSnackbar({
+          open: true,
+          message: "Failed to send message",
+          severity: "error",
+        });
       }
     },
-    [newMessage, user]
+    [newMessage, user, getDeviceId]
   );
+
   const handleDeleteMessage = useCallback(async () => {
     if (!selectedMessage) return;
 
@@ -178,11 +219,21 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
     } catch (error) {
       console.error("Error deleting message:", error);
       setMessages((prev) => [...prev, selectedMessage]);
+      setSnackbar({
+        open: true,
+        message: "Failed to delete message",
+        severity: "error",
+      });
     }
     setDeleteDialogOpen(false);
     setAnchorEl(null);
     setSelectedMessage(null);
   }, [selectedMessage]);
+
+  const handleDeleteClick = useCallback(() => {
+    setDeleteDialogOpen(true);
+    setAnchorEl(null);
+  }, []);
 
   const handleMenuOpen = useCallback((event, message) => {
     setAnchorEl(event.currentTarget);
@@ -192,11 +243,6 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
   const handleMenuClose = useCallback(() => {
     setAnchorEl(null);
     setSelectedMessage(null);
-  }, []);
-
-  const handleDeleteClick = useCallback(() => {
-    setDeleteDialogOpen(true);
-    setAnchorEl(null);
   }, []);
 
   const formatTime = useCallback((timestamp) => {
@@ -216,39 +262,67 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
   };
 
   const MessageItem = React.memo(({ message, isCurrentUser }) => {
-    const [anchorEl, setAnchorEl] = useState(null);
+    const isCurrentUserMessage = 
+      (user && message.uid === user.uid) || 
+      (!user && message.deviceId === getDeviceId());
     
-    
-    const isSpecial = message.displayName === "Administrator" || !message.displayName;
-  
-    const handleMenuOpen = (event) => {
-      setAnchorEl(event.currentTarget);
-    };
-  
-    const handleMenuClose = () => {
-      setAnchorEl(null);
-    };
-  
+    const isAdmin = message.isAdmin;
+    const isDriver = message.displayName === "Driver" && !isAdmin;
+    const isGuest = !message.isAuthenticated;
+
+    // Determine colors based on user type
+    const backgroundColor = isAdmin 
+      ? "rgba(255, 165, 0, 0.3)" // Orange for admin
+      : isDriver 
+        ? "rgba(30, 144, 255, 0.3)" // Blue for driver
+        : isCurrentUserMessage
+          ? "rgba(46, 125, 50, 0.5)" // Green for current user
+          : "rgba(255, 255, 255, 0.1)"; // White for others
+
+    const borderColor = isAdmin 
+      ? "1px solid rgba(255, 165, 0, 0.5)" 
+      : isDriver 
+        ? "1px solid rgba(30, 144, 255, 0.5)"
+        : "none";
+
+    const textColor = isAdmin 
+      ? "rgba(255, 255, 255, 0.9)" 
+      : isDriver 
+        ? "rgba(255, 255, 255, 0.9)"
+        : "white";
+
+    const avatarColor = isAdmin 
+      ? "#FFA500" 
+      : isDriver 
+        ? "#1E90FF"
+        : "#3B82F6";
+
+    const nameColor = isAdmin 
+      ? "#FFA500" 
+      : isDriver 
+        ? "#1E90FF"
+        : "white";
+
     return (
       <ListItem
         sx={{
           padding: "4px 0",
           alignItems: "flex-start",
-          justifyContent: isCurrentUser ? "flex-end" : "flex-start",
+          justifyContent: isCurrentUserMessage ? "flex-end" : "flex-start",
         }}
       >
         <Box
           sx={{
             display: "flex",
             marginTop: "10px",
-            flexDirection: isCurrentUser ? "row-reverse" : "row",
+            flexDirection: isCurrentUserMessage ? "row-reverse" : "row",
             alignItems: "flex-start",
             maxWidth: "80%",
             gap: "5px",
             position: "relative",
           }}
         >
-          {isCurrentUser && (
+          {isCurrentUserMessage && (
             <>
               <IconButton
                 size="small"
@@ -262,150 +336,84 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
                   width: 28,
                   height: 28,
                 }}
-                onClick={handleMenuOpen}
+                onClick={(e) => handleMenuOpen(e, message)}
               >
                 <FaEllipsisV size={12} />
               </IconButton>
-  
+
               <Menu
                 anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
+                open={Boolean(anchorEl) && selectedMessage?.id === message.id}
                 onClose={handleMenuClose}
-                anchorOrigin={{
-                  vertical: "center",
-                  horizontal: isCurrentUser ? "left" : "right",
-                }}
-                transformOrigin={{
-                  vertical: "center",
-                  horizontal: isCurrentUser ? "right" : "left",
-                }}
-                PaperProps={{
-                  sx: {
-                    backgroundColor: "#1e293b",
-                    color: "white",
-                    boxShadow: "0px 4px 20px rgba(0,0,0,0.2)",
-                    minWidth: "120px",
-                  },
-                }}
               >
-                <MenuItem
-                  onClick={() => {
-                    setSelectedMessage(message);
-                    setDeleteDialogOpen(true);
-                    handleMenuClose();
-                  }}
-                  sx={{
-                    "&:hover": {
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                    },
-                  }}
-                >
-                  <ListItemIcon>
-                    <FaTrash size={14} color="#ef4444" />
+                <MenuItem onClick={handleDeleteClick}>
+                  <ListItemIcon sx={{ color: "#ef4444" }}>
+                    <FaTrash size={14} />
                   </ListItemIcon>
                   <ListItemText primary="Delete" sx={{ color: "#ef4444" }} />
                 </MenuItem>
               </Menu>
             </>
           )}
-  
+
           <Avatar
             src={message.photoURL}
             sx={{
               width: 32,
               height: 32,
-              backgroundColor: isSpecial 
-                ? "#FFA500" 
-                : message.photoURL 
-                  ? "transparent" 
-                  : "#3B82F6",
+              backgroundColor: avatarColor,
             }}
           >
-            {message.displayName?.charAt(0) || "A"}
+            {message.displayName?.charAt(0)}
           </Avatar>
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
               gap: "4px",
-              position: "relative",
             }}
           >
             <Box
               sx={{
-                backgroundColor: isSpecial
-                  ? "rgba(255, 165, 0, 0.3)" 
-                  : isCurrentUser
-                    ? "rgba(103, 105, 103, 0.5)" 
-                    : "rgba(255,255,255,0.1)", 
+                backgroundColor,
                 borderRadius: "12px",
                 padding: "8px 12px",
-                position: "relative",
-                maxWidth: "100%",
-                border: isSpecial ? "1px solid rgba(255, 165, 0, 0.5)" : "none",
+                border: borderColor,
               }}
             >
               <Typography
                 variant="body2"
                 sx={{
-                  wordBreak: "break-word",
-                  fontSize: "0.875rem",
-                  color: "white",
-                  paddingRight: "45px",
+                  color: textColor,
                 }}
               >
                 {message.text}
               </Typography>
-  
-              <Box
+              <Typography
+                variant="caption"
                 sx={{
-                  position: "absolute",
-                  right: "5px",
-                  bottom: "0px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
+                  color: isAdmin || isDriver 
+                    ? "rgba(255, 255, 255, 0.7)" 
+                    : "rgba(255,255,255,0.6)",
                 }}
               >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontSize: "0.60rem",
-                    color: isSpecial 
-                      ? "rgba(255, 255, 255, 0.8)" 
-                      : "rgba(255,255,255,0.6)",
-                  }}
-                >
-                  {formatTime(message.timestamp)}
-                </Typography>
-              </Box>
+                {formatTime(message.timestamp)}
+              </Typography>
             </Box>
             <Typography
+              variant="caption"
               sx={{
-                fontWeight: "bold",
-                fontSize: "0.75rem",
-                color: isSpecial ? "#FFA500" : "white",
-                textAlign: isCurrentUser ? "right" : "left",
+                color: nameColor,
               }}
             >
-              <Typography
-                sx={{
-                  fontSize: "0.75rem",
-                  color: isSpecial 
-                    ? "rgba(255, 165, 0, 0.7)" 
-                    : "#949494",
-                  textAlign: isCurrentUser ? "right" : "left",
-                }}
-              >
-                sent by
-              </Typography>
-              {message.displayName || "Anonymous"}
+              {message.displayName}
             </Typography>
           </Box>
         </Box>
       </ListItem>
     );
   });
+
   return (
     <motion.div
       initial="closed"
@@ -417,10 +425,7 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
         top: 0,
         height: "100vh",
         backgroundColor: "#0f1728",
-        boxShadow: "-4px 0 20px rgba(0,0,0,0.1)",
         zIndex: 1000,
-        overflow: "hidden",
-        borderLeft: "1px solid #e0e0e0",
         display: "flex",
         flexDirection: "column",
       }}
@@ -447,7 +452,7 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
           }}
         >
           <Typography variant="h4" sx={{ fontWeight: "bold", color: "white" }}>
-            Chat
+            Driver Chat
             <FaComment size={28} style={{ marginLeft: "5px" }} />
           </Typography>
           <Box>
@@ -599,7 +604,6 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
         </Box>
       </Box>
 
-      {}
       <Dialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
@@ -640,7 +644,6 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
         </DialogActions>
       </Dialog>
 
-      {}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -670,6 +673,19 @@ const Chatroom = ({ isOpen, toggleChatroom, unreadCount, clearUnread }) => {
           />
         </MenuItem>
       </Menu>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </motion.div>
   );
 };
